@@ -33,6 +33,14 @@ void main()
         if (GetLocalInt(oPC, DOOM_VAR_FPS)) DoomCameraThirdPerson(oPC);
         else DoomCameraFirstPerson(oPC);
     }
+    else if (sMsg == "/lockcam")
+    {
+        int bFree = !GetLocalInt(oPC, DOOM_VAR_CAM_FREE);
+        SetLocalInt(oPC, DOOM_VAR_CAM_FREE, bFree);
+        if (GetLocalInt(oPC, DOOM_VAR_FPS)) DoomCameraFirstPerson(oPC);
+        if (bFree) SendMessageToPC(oPC, "Camera unlocked: it can turn freely.");
+        else       SendMessageToPC(oPC, "Camera locked to where your character faces.");
+    }
     else if (sMsg == "/wave")
     {
         DoomSpawnWave(oPC, GetLocalInt(GetModule(), DOOM_WAVE_VAR) + 1);

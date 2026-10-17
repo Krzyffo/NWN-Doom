@@ -143,10 +143,24 @@ void DoomClearFx(object oPC)
     }
 }
 
+// Set by the /lockcam chat command to let the camera turn freely again.
+const string DOOM_VAR_CAM_FREE = "DOOM_CAM_FREE";
+
 void DoomCameraFirstPerson(object oPC)
 {
     DoomClearFx(oPC);
-    SetCameraMode(oPC, CAMERA_MODE_CHASE_CAMERA);
+    if (GetLocalInt(oPC, DOOM_VAR_CAM_FREE))
+    {
+        SetCameraMode(oPC, CAMERA_MODE_CHASE_CAMERA);
+        SetCameraFlags(oPC, CAMERA_FLAG_DISABLE_ZOOM);
+    }
+    else
+    {
+        // Camera rigidly behind the character's facing, and no turning the
+        // camera on its own: the view always points where the model looks.
+        SetCameraMode(oPC, CAMERA_MODE_STIFF_CHASE_CAMERA);
+        SetCameraFlags(oPC, CAMERA_FLAG_DISABLE_TURN | CAMERA_FLAG_DISABLE_ZOOM);
+    }
     SetCameraHeight(oPC, 1.75);
     // Pitch near horizontal, distance as close as the client allows.
     SetCameraLimits(oPC, 70.0, 100.0, 0.1, 0.4);
@@ -160,6 +174,8 @@ void DoomCameraFirstPerson(object oPC)
 
 void DoomCameraThirdPerson(object oPC)
 {
+    SetCameraMode(oPC, CAMERA_MODE_CHASE_CAMERA);
+    SetCameraFlags(oPC, 0);
     SetCameraHeight(oPC, 0.0);
     SetCameraLimits(oPC, -1.0, -1.0, -1.0, -1.0);
     DoomClearFx(oPC);

@@ -12,7 +12,7 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 
 | Doom mechanic | How it works here |
 |---|---|
-| First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility |
+| First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility. Stiff chase camera with camera turning disabled, so the view always points where the character faces (`/lockcam` toggles this) |
 | Moving | NWN's own WASD movement in chase-camera mode |
 | Shooting | The player is kept in targeting mode with an attack cursor. Each click fires `doom_target`, which deals damage instantly (no attack roll, no 6-second rounds) |
 | Weapons | 1 Fist (2-20, 2.5 m reach), 2 Pistol (5-15 per shot), 3 Shotgun (7 pellets of 5-15; stray pellets hit enemies near the aim point). Fire-rate cooldowns per weapon |
@@ -48,6 +48,7 @@ is slower than in Doom.
 | `/balor` | Testing: spawn a balor 12 m ahead |
 | `/gun` | Re-arm after right-click / Escape cancelled the gun cursor |
 | `/fps` | Toggle first-person / normal camera |
+| `/lockcam` | Toggle locking the camera to where your character faces (on by default) |
 | `/wave` | Spawn the next wave now |
 | `/hud` | Recreate the HUD (e.g. after changing resolution) |
 
