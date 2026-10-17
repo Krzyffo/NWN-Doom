@@ -163,6 +163,10 @@ const float DOOM_IMP_FOV       = 30.0;   // stay within +-this many degrees of t
 const float DOOM_IMP_DRIFT     = 12.0;   // random sidestep around its spot, degrees
 const float DOOM_IMP_CORNERED  = 2.2;    // closer than this it claws instead
 const float DOOM_IMP_REPATH    = 2.0;    // only re-path if the spot moved this far
+const float DOOM_IMP_VIEW      = 40.0;   // counts as "in view" within +-this many degrees
+const int   DOOM_IMP_PATIENCE  = 8;      // ticks (4 s) out of view before it throws anyway
+
+const string DOOM_IMP_UNSEEN_VAR = "DOOM_IMP_UNSEEN";
 
 const string DOOM_IMP_BUSY_VAR  = "DOOM_IMP_BUSY";
 const string DOOM_IMP_DRIFT_VAR = "DOOM_IMP_DRIFTV";
@@ -277,9 +281,20 @@ void main()
         return;
     }
 
-    // Throw when ready and the player is in sight.
+    // Is the imp on the player's screen? (The first-person camera is locked
+    // to the character's facing.) Count how long it has been off screen.
+    float fRel = DoomAngleDiff(VectorToAngle(GetPosition(oImp) - GetPosition(oPC)), GetFacing(oPC));
+    int bInView = fabs(fRel) <= DOOM_IMP_VIEW;
+    int nUnseen = 0;
+    if (!bInView) nUnseen = GetLocalInt(oImp, DOOM_IMP_UNSEEN_VAR) + 1;
+    SetLocalInt(oImp, DOOM_IMP_UNSEEN_VAR, nUnseen);
+
+    // Throw when ready and the player is in sight, but get into the
+    // player's view first so the fireball can be seen coming. If it cannot
+    // get there (walls, tight corridors), it throws anyway after a while.
     if (nCooldown <= 0 && fDist >= DOOM_IMP_MIN_RANGE && fDist <= DOOM_IMP_MAX_RANGE
-        && LineOfSightObject(oImp, oPC))
+        && LineOfSightObject(oImp, oPC)
+        && (bInView || nUnseen >= DOOM_IMP_PATIENCE))
     {
         vector vTarget = GetPosition(oPC);
         ClearAllActions();
