@@ -4,28 +4,28 @@
 #include "nw_inc_nui"
 
 // Topmost virtual y any weapon frame reaches; the HUD window starts here.
-const float DOOM_ART_TOP = 13.0;
+const float DOOM_ART_TOP = 41.0;
 
 // Rect of weapon frame sResRef inside the HUD window at scale fScale.
 json DoomSpriteRect(string sResRef, float fScale)
 {
     float x = 0.0; float y = 0.0; float w = 0.0; float h = 0.0;
-    if (sResRef == "dm_pisfa0") { x = 146.0; y = 76.0; w = 31.0; h = 51.0; }
-    else if (sResRef == "dm_pisga0") { x = 129.0; y = 116.0; w = 55.0; h = 68.0; }
-    else if (sResRef == "dm_pisgb0") { x = 110.0; y = 99.0; w = 74.0; h = 85.0; }
-    else if (sResRef == "dm_pisgc0") { x = 124.0; y = 104.0; w = 65.0; h = 80.0; }
-    else if (sResRef == "dm_pisgd0") { x = 123.0; y = 104.0; w = 65.0; h = 80.0; }
-    else if (sResRef == "dm_pisge0") { x = 129.0; y = 116.0; w = 55.0; h = 68.0; }
-    else if (sResRef == "dm_punga0") { x = 49.0; y = 68.0; w = 242.0; h = 116.0; }
-    else if (sResRef == "dm_pungb0") { x = 19.0; y = 13.0; w = 345.0; h = 179.0; }
-    else if (sResRef == "dm_pungc0") { x = 104.0; y = 49.0; w = 259.0; h = 134.0; }
-    else if (sResRef == "dm_pungd0") { x = 117.0; y = 55.0; w = 229.0; h = 134.0; }
-    else if (sResRef == "dm_shtfa0") { x = 112.0; y = 75.0; w = 91.0; h = 118.0; }
-    else if (sResRef == "dm_shtfb0") { x = 112.0; y = 75.0; w = 91.0; h = 118.0; }
-    else if (sResRef == "dm_shtga0") { x = 112.0; y = 75.0; w = 91.0; h = 118.0; }
-    else if (sResRef == "dm_shtgb0") { x = 156.0; y = 90.0; w = 94.0; h = 97.0; }
-    else if (sResRef == "dm_shtgc0") { x = 152.0; y = 50.0; w = 143.0; h = 137.0; }
-    else if (sResRef == "dm_shtgd0") { x = 149.0; y = 58.0; w = 145.0; h = 128.0; }
+    if (sResRef == "dm_pisfa0") { x = 145.0; y = 85.0; w = 32.0; h = 30.0; }
+    else if (sResRef == "dm_pisga0") { x = 126.0; y = 113.0; w = 82.0; h = 92.0; }
+    else if (sResRef == "dm_pisgb0") { x = 126.0; y = 98.0; w = 82.0; h = 96.0; }
+    else if (sResRef == "dm_pisgc0") { x = 125.0; y = 103.0; w = 84.0; h = 100.0; }
+    else if (sResRef == "dm_pisgd0") { x = 126.0; y = 92.0; w = 84.0; h = 106.0; }
+    else if (sResRef == "dm_pisge0") { x = 124.0; y = 84.0; w = 86.0; h = 120.0; }
+    else if (sResRef == "dm_punga0") { x = 97.0; y = 144.0; w = 96.0; h = 46.0; }
+    else if (sResRef == "dm_pungb0") { x = 65.0; y = 160.0; w = 256.0; h = 32.0; }
+    else if (sResRef == "dm_pungc0") { x = 193.0; y = 124.0; w = 110.0; h = 72.0; }
+    else if (sResRef == "dm_pungd0") { x = 145.0; y = 100.0; w = 208.0; h = 96.0; }
+    else if (sResRef == "dm_shtfa0") { x = 143.0; y = 114.0; w = 36.0; h = 47.0; }
+    else if (sResRef == "dm_shtfb0") { x = 132.0; y = 106.0; w = 58.0; h = 55.0; }
+    else if (sResRef == "dm_shtga0") { x = 123.0; y = 123.0; w = 67.0; h = 62.0; }
+    else if (sResRef == "dm_shtgb0") { x = 79.0; y = 56.0; w = 88.0; h = 128.0; }
+    else if (sResRef == "dm_shtgc0") { x = 61.0; y = 41.0; w = 93.0; h = 143.0; }
+    else if (sResRef == "dm_shtgd0") { x = 45.0; y = 55.0; w = 108.0; h = 129.0; }
     return NuiRect(x * fScale, (y - DOOM_ART_TOP) * fScale, w * fScale, h * fScale);
 }
 

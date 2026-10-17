@@ -59,7 +59,10 @@ is slower than in Doom.
    copies it to your NWN `hak` folder and regenerates `src/doom_art.nss`.
    Works with id's `doom.wad` / `doom2.wad` and with
    [Freedoom](https://freedoom.github.io/) (Freedoom has no status bar
-   face, so that slot stays empty).
+   face, so that slot stays empty). It also converts the pistol, shotgun,
+   punch and imp fireball sounds. Use the official `freedoom2.wad`:
+   some repacked WADs ship empty sound stubs, and the tool warns when a
+   sound has no audio (the game then stays silent for it).
 2. **Scripts:** `py tools/build.py` compiles `src/` with Beamdog's official
    `nwn_script_comp` and writes `build/nwn_doom.erf` (sources plus compiled
    `.ncs`). Run it again whenever a script in `src/` changes.
@@ -107,9 +110,12 @@ not compiled into the module, and warns if the description is empty.
 The zip mirrors the NWN user folder (`modules/`, `hak/`), so players
 unzip it into `Documents\Neverwinter Nights`. It also contains a
 `README.txt` (install steps plus `docs/module_description.txt`) and
-`FREEDOOM-LICENSE.txt`: Freedoom's BSD licence requires its copyright
-notice to ship with the art. Nothing is uploaded; publish the zip
+`FREEDOOM-LICENSE.txt` plus `FREEDOOM-CREDITS.txt`: Freedoom's BSD licence
+requires its copyright notice to ship with the art. Nothing is uploaded; publish the zip
 yourself (e.g. on the Neverwinter Vault).
+
+Package after importing the latest `build/nwn_doom.erf` and building the
+module: the zip contains the module exactly as last saved by the toolset.
 
 ## Repository layout
 
@@ -119,7 +125,8 @@ yourself (e.g. on the Neverwinter Vault).
 - `tools/build.py`: compile + pack the scripts in one step.
 - `tools/package.py`: checks the module and builds the player release zip.
 - `docs/module_description.txt`: module description / player controls.
-- `licenses/FREEDOOM-COPYING.txt`: Freedoom's licence, shipped with the art.
+- `licenses/`: Freedoom's licence (`FREEDOOM-COPYING.txt`) and contributor list
+  (`FREEDOOM-CREDITS.txt`), both shipped with the art.
 - `tools/build_erf.py`: ERF/HAK writer; `--list <file>` shows an archive's contents.
 - `tools/nwn_key.py`: reads the game's KEY/BIF archives to list or extract
   stock resources (scripts, blueprints, 2DAs) from your install, e.g.

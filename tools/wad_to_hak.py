@@ -6,6 +6,8 @@
   sprites (Doom picture format + PLAYPAL palette).
 - Writes them as 32-bit TGAs, scaled up 4x with nearest-neighbour so the
   pixels stay crisp, named dm_<lump> (e.g. dm_stbar.tga).
+- Converts the weapon and imp sounds (Doom DMX or WAV lumps) to mono
+  16-bit WAVs named dm_<lump> (e.g. dm_dspistol.wav).
 - Generates src/doom_art.nss with each weapon frame's screen position,
   computed the way Doom places player sprites above the status bar.
 - Packs build/nwn_doom.hak and copies it to the NWN hak folder.
@@ -23,7 +25,7 @@ import sys
 import build_erf
 
 ROOT = build_erf.ROOT
-WAD = os.environ.get("DOOM_WAD", r"E:\Users\Krzysiek\Downloads\doom2WAD\doom2.wad")
+WAD = os.environ.get("DOOM_WAD", r"E:\Users\Krzysiek\Downloads\freedoom-0.13.0\freedoom2.wad")
 NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")
 ART_DIR = os.path.join(ROOT, "build", "art")
 HAK_OUT = os.path.join(ROOT, "build", "nwn_doom.hak")
@@ -39,6 +41,9 @@ HUD_LUMPS = (["STBAR", "STARMS", "STTPRCNT", "STTMINUS"]
              + [f"STGNUM{i}" for i in range(2, 8)])
 # First-person weapon frames: name pattern -> found frames are all extracted.
 WEAPON_RE = re.compile(r"^(PUNG|PISG|PISF|SHTG|SHTF)[A-Z]0$")
+
+# Sounds, played by the scripts as dm_<lump> (e.g. dm_dspistol).
+SOUND_LUMPS = ["DSPISTOL", "DSSHOTGN", "DSPUNCH", "DSFIRSHT", "DSFIRXPL"]
 
 # Doom draws player sprites at x = 1 - leftoffset and, with the status bar
 # shown (view height 168, centre 84), at y = 16 - topoffset.
@@ -82,6 +87,53 @@ def decode_picture(blob, palette):
     return w, h, left, top, pixels
 
 
+def decode_sound(blob):
+    """Doom (DMX) or WAV sound lump -> (rate, mono 16-bit samples) or None if unusable.
+
+    Some repacked WADs carry 58-byte stubs: a WAV header with no audio. Those,
+    and anything else truncated or empty, return None.
+    """
+    if blob[:4] == b"RIFF" and blob[8:12] == b"WAVE":
+        pos, fmt, data = 12, None, None
+        while pos + 8 <= len(blob):
+            cid, size = struct.unpack_from("<4sI", blob, pos)
+            body = blob[pos + 8:pos + 8 + size]
+            if len(body) < size:
+                return None  # truncated
+            if cid == b"fmt ":
+                fmt = struct.unpack_from("<HHIIHH", body, 0)
+            elif cid == b"data":
+                data = body
+            pos += 8 + size + (size & 1)
+        if not fmt or not data or fmt[0] != 1 or fmt[5] not in (8, 16):
+            return None
+        _tag, channels, rate, _bps, _align, bits = fmt
+        if bits == 8:
+            frames = [(s - 128) << 8 for s in data]
+        else:
+            frames = list(struct.unpack(f"<{len(data) // 2}h", data[:len(data) // 2 * 2]))
+        if channels > 1:  # down-mix: PlaySound is positional and wants mono
+            frames = [sum(frames[i:i + channels]) // channels
+                      for i in range(0, len(frames) - channels + 1, channels)]
+        return (rate, frames) if len(frames) >= 100 else None
+
+    if len(blob) >= 8:
+        fmt, rate, count = struct.unpack_from("<HHI", blob, 0)
+        data = blob[8:8 + count]
+        if fmt == 3 and len(data) == count and count > 132:
+            data = data[16:-16]  # DMX pads 16 samples at each end
+            return rate, [(s - 128) << 8 for s in data]
+    return None
+
+
+def write_wav(path, rate, samples):
+    data = struct.pack(f"<{len(samples)}h", *samples)
+    header = struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + len(data), b"WAVE",
+                         b"fmt ", 16, 1, 1, rate, rate * 2, 2, 16, b"data", len(data))
+    with open(path, "wb") as f:
+        f.write(header + data)
+
+
 def write_tga(path, w, h, pixels, scale):
     sw, sh = w * scale, h * scale
     header = struct.pack("<BBBHHBHHHHBB", 0, 0, 2, 0, 0, 0, 0, 0, sw, sh, 32, 8)
@@ -123,6 +175,21 @@ def main():
             sprites[resref] = (SPRITE_X0 - left, SPRITE_Y0 - top, w, h)
     missing = [n for n in HUD_LUMPS if n not in lumps]
     print(f"converted {len(written)} images; skipped placeholders: {skipped or 'none'}; missing: {missing or 'none'}")
+
+    sounds, bad_sounds = 0, []
+    for name in SOUND_LUMPS:
+        decoded = decode_sound(lumps[name]) if name in lumps else None
+        if decoded is None:
+            bad_sounds.append(name)
+            continue
+        path = os.path.join(ART_DIR, PREFIX + name.lower() + ".wav")
+        write_wav(path, *decoded)
+        written.append(path)
+        sounds += 1
+    print(f"converted {sounds} of {len(SOUND_LUMPS)} sounds")
+    if bad_sounds:
+        print(f"warning: no usable audio for {', '.join(bad_sounds)} (missing, or empty stubs as in "
+              "some repacked WADs); the game stays silent for those. The official freedoom2.wad has them.")
 
     write_art_include(sprites)
     build_erf.write_erf(HAK_OUT, written, b"HAK ")

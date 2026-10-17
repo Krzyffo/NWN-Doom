@@ -9,6 +9,7 @@ that the module is set up for release, and writes build/dist/<NAME>-<X.Y>.zip:
   hak/nwn_doom.hak
   README.txt               install steps + docs/module_description.txt
   FREEDOOM-LICENSE.txt     licenses/FREEDOOM-COPYING.txt (required by the BSD licence)
+  FREEDOOM-CREDITS.txt     licenses/FREEDOOM-CREDITS.txt (the contributor list it refers to)
 
 The zip mirrors the NWN user folder, so players can unzip it straight into
 Documents\\Neverwinter Nights. Nothing is uploaded anywhere.
@@ -34,6 +35,7 @@ NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")
 GFF_TOOL = os.path.join(ROOT, "tools", "neverwinter", "nwn_gff.exe")
 DESCRIPTION = os.path.join(ROOT, "docs", "module_description.txt")
 LICENSE = os.path.join(ROOT, "licenses", "FREEDOOM-COPYING.txt")
+CREDITS = os.path.join(ROOT, "licenses", "FREEDOOM-CREDITS.txt")
 DIST = os.path.join(ROOT, "build", "dist")
 HAK_NAME = "nwn_doom"
 RES_IFO = 2014
@@ -58,7 +60,8 @@ INSTALL
 Requires NWN: Enhanced Edition. It does not run on the original 2002 game.
 
 The HUD and weapon art comes from Freedoom (https://freedoom.github.io/),
-used under its BSD licence; see FREEDOOM-LICENSE.txt.
+used under its BSD licence; see FREEDOOM-LICENSE.txt and
+FREEDOOM-CREDITS.txt.
 
 """
 
@@ -147,7 +150,7 @@ def main():
     if not os.path.exists(mod_path):
         available = sorted(f[:-4] for f in os.listdir(os.path.join(NWN_USER, "modules")) if f.endswith(".mod"))
         fail(f"{mod_path} not found. Modules there: {', '.join(available) or 'none'}. Use --module NAME.")
-    for path in (DESCRIPTION, LICENSE):
+    for path in (DESCRIPTION, LICENSE, CREDITS):
         if not os.path.exists(path):
             fail(f"{path} is missing")
 
@@ -170,6 +173,7 @@ def main():
         # Windows line endings: players open these in Notepad.
         z.writestr("README.txt", readme.replace("\r\n", "\n").replace("\n", "\r\n"))
         z.write(LICENSE, "FREEDOOM-LICENSE.txt")
+        z.write(CREDITS, "FREEDOOM-CREDITS.txt")
 
     print(f"module:  {mod_path}" + (f" (\"{title}\")" if title else ""))
     print(f"hak:     {hak_path}")

@@ -26,8 +26,12 @@ int DoomCanShoot(object oPC, object oTarget)
 
 void DoomPunch(object oPC, object oTarget)
 {
+    // Like Doom, the punch only makes a sound when it connects.
     if (DoomCanShoot(oPC, oTarget) && GetDistanceBetween(oPC, oTarget) <= DOOM_FIST_RANGE)
+    {
+        AssignCommand(oPC, PlaySound(DOOM_SND_PUNCH));
         DoomHit(oPC, oTarget, DoomRandomRange(DOOM_FIST_MIN, DOOM_FIST_MAX));
+    }
 }
 
 void DoomFirePistol(object oPC, object oTarget, location lAim)
@@ -158,11 +162,13 @@ void main()
     }
     else if (nWeapon == DOOM_WEAPON_SHOTGUN)
     {
+        AssignCommand(oPC, PlaySound(DOOM_SND_SHOTGUN));
         SetLocalInt(oPC, DOOM_VAR_SHELLS, GetLocalInt(oPC, DOOM_VAR_SHELLS) - 1);
         DoomFireShotgun(oPC, oVictim, lAim);
     }
     else
     {
+        AssignCommand(oPC, PlaySound(DOOM_SND_PISTOL));
         SetLocalInt(oPC, DOOM_VAR_BULLETS, GetLocalInt(oPC, DOOM_VAR_BULLETS) - 1);
         DoomFirePistol(oPC, oVictim, lAim);
     }

@@ -22,6 +22,15 @@ const int   DOOM_SHOTGUN_COOLDOWN_MS = 950;
 const float DOOM_SHOTGUN_SPLASH      = 2.5;  // stray pellets can hit enemies this close to the target
 const float DOOM_WEAPON_RANGE        = 40.0;
 
+// ---- Sounds --------------------------------------------------------------
+// WAVs extracted from the WAD into the hak by tools/wad_to_hak.py. A sound
+// the WAD did not have simply stays silent.
+const string DOOM_SND_PISTOL   = "dm_dspistol";
+const string DOOM_SND_SHOTGUN  = "dm_dsshotgn";
+const string DOOM_SND_PUNCH    = "dm_dspunch";
+const string DOOM_SND_FIRESHOT = "dm_dsfirsht";
+const string DOOM_SND_FIREEXPL = "dm_dsfirxpl";
+
 // ---- Ammo ----------------------------------------------------------------
 const int DOOM_START_BULLETS = 50;
 const int DOOM_MAX_BULLETS   = 200;

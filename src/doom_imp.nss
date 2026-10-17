@@ -46,6 +46,14 @@ void DoomBallExplode(object oBall, vector vPos)
 {
     location lHere = Location(GetArea(oBall), vPos, 0.0);
     ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_IMP_FLAME_M), lHere);
+    // The ball object itself stays at the launch point, so the explosion
+    // sound comes from a short-lived invisible object at the impact.
+    object oSound = CreateObject(OBJECT_TYPE_PLACEABLE, DOOM_BALL_RESREF, lHere);
+    if (GetIsObjectValid(oSound))
+    {
+        AssignCommand(oSound, PlaySound(DOOM_SND_FIREEXPL));
+        DestroyObject(oSound, 3.0);
+    }
     DestroyObject(oBall);
 }
 
@@ -135,6 +143,7 @@ void DoomImpThrow(object oImp, vector vTarget)
     }
     SetUseableFlag(oBall, FALSE);
     SetPlotFlag(oBall, TRUE);
+    AssignCommand(oImp, PlaySound(DOOM_SND_FIRESHOT));
 
     ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(DOOM_BALL_VFX), lSpawn);
     float fTime = DOOM_BALL_RANGE / DOOM_BALL_SPEED;
