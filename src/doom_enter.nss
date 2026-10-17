@@ -11,15 +11,15 @@ void main()
 
     DoomResetLoadout(oPC);
     DoomCameraFirstPerson(oPC);
-    DoomHudOpen(oPC);
-    DoomHudUpdate(oPC);
+    // Opened after a moment: the client reports its screen size only once
+    // the area has loaded, and the HUD is sized from it.
+    DelayCommand(1.5, DoomHudOpen(oPC));
 
-    // Clicking on the HUD-less world is all the player needs; hide panels
-    // that would pop up over the view.
+    // Hide panels that would sit on top of the Doom view.
     SetGuiPanelDisabled(oPC, GUI_PANEL_MINIMAP, TRUE);
     SetGuiPanelDisabled(oPC, GUI_PANEL_COMPASS, TRUE);
 
-    SendMessageToPC(oPC, "NWN-Doom: WASD to move, click to shoot. Chat commands: /1 pistol, /2 shotgun, /gun re-arm, /fps toggle camera, /wave next wave.");
+    SendMessageToPC(oPC, "NWN-Doom: WASD to move, click to shoot. Weapons: drag the items '1: Fist', '2: Pistol' and '3: Shotgun' from your inventory to F1, F2, F3 (once). Chat: /gun re-arm, /fps camera, /wave next wave, /hud redraw HUD.");
 
     // Start the loop only once per player.
     if (!GetLocalInt(oPC, DOOM_VAR_ACTIVE))

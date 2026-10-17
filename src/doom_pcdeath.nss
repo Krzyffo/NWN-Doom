@@ -15,6 +15,7 @@ void DoomRespawn(object oPC)
     if (GetLocalInt(oPC, DOOM_VAR_FPS))
         DelayCommand(0.5, DoomCameraFirstPerson(oPC));
     DelayCommand(1.0, DoomArm(oPC));
+    DoomHudShowWeapon(oPC);
     DoomHudUpdate(oPC);
 }
 

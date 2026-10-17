@@ -19,7 +19,7 @@ import build_erf
 ROOT = build_erf.ROOT
 COMPILER = os.path.join(ROOT, "tools", "neverwinter", "nwn_script_comp.exe")
 NWN_ROOT = os.environ.get("NWN_ROOT", r"G:\SteamLibrary\steamapps\common\Neverwinter Nights")
-NWN_USER = os.environ.get("NWN_USER", r"D:\Users\Krzysiek\Documents\Neverwinter Nights")
+NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")  # see [Alias] HD0 in nwn.ini
 
 
 def main():

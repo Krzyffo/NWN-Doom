@@ -1,10 +1,13 @@
 """Pack the NWScript sources into an .erf the NWN toolset can import.
 
   py tools/build_erf.py            -> build/nwn_doom.erf
-  py tools/build_erf.py --list F   -> print the contents of an existing .erf
+  py tools/build_erf.py --list F   -> print the contents of an existing .erf/.hak
 
 In the toolset: File > Import..., pick the .erf, then Build > Build Module
 (or Compile all scripts) so the .nss files get compiled to .ncs.
+
+write_erf() is also used by wad_to_hak.py to write the art hak; the output
+matches what Beamdog's nwn_erf produces for the same files.
 """
 import datetime
 import os
@@ -16,18 +19,15 @@ SRC = os.path.join(ROOT, "src")
 NCS = os.path.join(ROOT, "build", "ncs")
 OUT = os.path.join(ROOT, "build", "nwn_doom.erf")
 
-RES_TYPES = {"nss": 2009, "ncs": 2010}
+RES_TYPES = {"tga": 3, "nss": 2009, "ncs": 2010}
 TYPE_EXT = {v: k for k, v in RES_TYPES.items()}
 HEADER_SIZE = 160
 KEY_SIZE = 24
 RES_SIZE = 8
 
 
-def build(out_path):
-    # Sources always; compiled scripts too when tools/build.py produced them.
-    paths = [os.path.join(SRC, f) for f in sorted(os.listdir(SRC)) if f.lower().endswith(".nss")]
-    if os.path.isdir(NCS):
-        paths += [os.path.join(NCS, f) for f in sorted(os.listdir(NCS)) if f.lower().endswith(".ncs")]
+def write_erf(out_path, paths, file_type=b"ERF "):
+    """Write an ERF-family archive (ERF, HAK, MOD) containing the given files."""
     entries = []
     for path in paths:
         name = os.path.basename(path)
@@ -45,13 +45,13 @@ def build(out_path):
     today = datetime.date.today()
     header = struct.pack(
         "<4s4sIIIIIIIII",
-        b"ERF ", b"V1.0",
+        file_type, b"V1.0",
         0, 0,                 # language count, localized string size
         count,
         off_keys,             # no localized strings: they would start here
         off_keys, off_res,
         today.year - 1900, today.timetuple().tm_yday - 1,
-        0xFFFFFFFF,           # description strref
+        0,                    # description strref (0, as Beamdog's nwn_erf writes it)
     ) + b"\0" * 116
 
     keys = b""
@@ -66,6 +66,14 @@ def build(out_path):
     with open(out_path, "wb") as f:
         f.write(header + keys + res_list + data)
     print(f"wrote {out_path} ({count} resources)")
+
+
+def build(out_path):
+    # Sources always; compiled scripts too when tools/build.py produced them.
+    paths = [os.path.join(SRC, f) for f in sorted(os.listdir(SRC)) if f.lower().endswith(".nss")]
+    if os.path.isdir(NCS):
+        paths += [os.path.join(NCS, f) for f in sorted(os.listdir(NCS)) if f.lower().endswith(".ncs")]
+    write_erf(out_path, paths)
 
 
 def list_erf(path):

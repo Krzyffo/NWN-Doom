@@ -6,7 +6,10 @@
 
 void DoomHit(object oPC, object oVictim, int nDamage)
 {
-    ApplyEffectToObject(DURATION_TYPE_INSTANT, EffectDamage(nDamage, DAMAGE_TYPE_PIERCING), oVictim);
+    // Applied as the player: this script runs on the module, and without
+    // AssignCommand the module would get the kill (no XP, no shotgun drop).
+    AssignCommand(oPC, ApplyEffectToObject(DURATION_TYPE_INSTANT,
+        EffectDamage(nDamage, DAMAGE_TYPE_PIERCING), oVictim));
     ApplyEffectToObject(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_COM_BLOOD_REG_RED), oVictim);
     // Shooting a monster always draws its attention, Doom style.
     if (!GetIsDead(oVictim))
@@ -18,6 +21,12 @@ int DoomCanShoot(object oPC, object oTarget)
     if (!GetIsObjectValid(oTarget) || GetIsDead(oTarget)) return FALSE;
     if (GetDistanceBetween(oPC, oTarget) > DOOM_WEAPON_RANGE) return FALSE;
     return LineOfSightObject(oPC, oTarget);
+}
+
+void DoomPunch(object oPC, object oTarget)
+{
+    if (DoomCanShoot(oPC, oTarget) && GetDistanceBetween(oPC, oTarget) <= DOOM_FIST_RANGE)
+        DoomHit(oPC, oTarget, DoomRandomRange(DOOM_FIST_MIN, DOOM_FIST_MAX));
 }
 
 void DoomFirePistol(object oPC, object oTarget, location lAim)
@@ -110,6 +119,7 @@ void main()
     int nWeapon = GetLocalInt(oPC, DOOM_VAR_WEAPON);
     int nCooldown = DOOM_PISTOL_COOLDOWN_MS;
     if (nWeapon == DOOM_WEAPON_SHOTGUN) nCooldown = DOOM_SHOTGUN_COOLDOWN_MS;
+    if (nWeapon == DOOM_WEAPON_FIST)    nCooldown = DOOM_FIST_COOLDOWN_MS;
 
     // Fire-rate limit. The counter can wrap, so a negative delta also fires.
     int nNow = GetMicrosecondCounter();
@@ -120,12 +130,16 @@ void main()
         return;
     }
 
-    if (DoomGetAmmo(oPC) <= 0)
+    if (nWeapon != DOOM_WEAPON_FIST && DoomGetAmmo(oPC) <= 0)
     {
         DoomMessage(oPC, "Out of ammo!");
-        // Doom switches back to the pistol when the shotgun runs dry.
+        // Like Doom, fall back to the next best weapon that still works.
         if (nWeapon == DOOM_WEAPON_SHOTGUN && GetLocalInt(oPC, DOOM_VAR_BULLETS) > 0)
             SetLocalInt(oPC, DOOM_VAR_WEAPON, DOOM_WEAPON_PISTOL);
+        else
+            SetLocalInt(oPC, DOOM_VAR_WEAPON, DOOM_WEAPON_FIST);
+        DoomHudShowWeapon(oPC);
+        DoomHudUpdate(oPC);
         DoomArm(oPC);
         return;
     }
@@ -136,7 +150,12 @@ void main()
     if (GetObjectType(oTarget) == OBJECT_TYPE_CREATURE && oTarget != oPC)
         oVictim = oTarget;
 
-    if (nWeapon == DOOM_WEAPON_SHOTGUN)
+    DoomHudFireAnim(oPC);
+    if (nWeapon == DOOM_WEAPON_FIST)
+    {
+        DoomPunch(oPC, oVictim);
+    }
+    else if (nWeapon == DOOM_WEAPON_SHOTGUN)
     {
         SetLocalInt(oPC, DOOM_VAR_SHELLS, GetLocalInt(oPC, DOOM_VAR_SHELLS) - 1);
         DoomFireShotgun(oPC, oVictim, lAim);

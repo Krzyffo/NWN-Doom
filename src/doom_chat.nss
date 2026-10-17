@@ -1,5 +1,5 @@
-// doom_chat: module OnPlayerChat. Slash commands stand in for Doom's
-// number keys until a keybinding solution exists.
+// doom_chat: module OnPlayerChat. Debug and fallback commands; weapons are
+// normally switched with the F1-F3 quickbar items.
 
 #include "doom_inc"
 
@@ -10,19 +10,19 @@ void main()
     if (GetStringLeft(sMsg, 1) != "/") return;
 
     if (sMsg == "/1")
-    {
-        SetLocalInt(oPC, DOOM_VAR_WEAPON, DOOM_WEAPON_PISTOL);
-        DoomMessage(oPC, "PISTOL");
-    }
+        DoomSelectWeapon(oPC, DOOM_WEAPON_FIST);
     else if (sMsg == "/2")
+        DoomSelectWeapon(oPC, DOOM_WEAPON_PISTOL);
+    else if (sMsg == "/3")
+        DoomSelectWeapon(oPC, DOOM_WEAPON_SHOTGUN);
+    else if (sMsg == "/idkfa")
     {
-        if (GetLocalInt(oPC, DOOM_VAR_HAS_SG))
-        {
-            SetLocalInt(oPC, DOOM_VAR_WEAPON, DOOM_WEAPON_SHOTGUN);
-            DoomMessage(oPC, "SHOTGUN");
-        }
-        else
-            DoomMessage(oPC, "You don't have the shotgun yet.");
+        // Doom's cheat: all weapons, full ammo, 200% armor. For testing.
+        SetLocalInt(oPC, DOOM_VAR_HAS_SG, TRUE);
+        SetLocalInt(oPC, DOOM_VAR_BULLETS, DOOM_MAX_BULLETS);
+        SetLocalInt(oPC, DOOM_VAR_SHELLS, DOOM_MAX_SHELLS);
+        SetLocalInt(oPC, DOOM_VAR_ARMOR, 200);
+        DoomPickupMessage(oPC, "Very Happy Ammo Added");
     }
     else if (sMsg == "/gun")
     {
@@ -36,6 +36,13 @@ void main()
     else if (sMsg == "/wave")
     {
         DoomSpawnWave(oPC, GetLocalInt(GetModule(), DOOM_WAVE_VAR) + 1);
+    }
+    else if (sMsg == "/balor")
+    {
+        // Testing: spawn a balor 12 m in front of the player.
+        vector vPos = GetPosition(oPC) + AngleToVector(GetFacing(oPC)) * 12.0;
+        DoomSpawnMonster(DOOM_RESREF_BALOR, Location(GetArea(oPC), vPos, GetFacing(oPC) + 180.0),
+                         oPC, DOOM_BALOR_TAG);
     }
     else if (sMsg == "/hud")
     {
