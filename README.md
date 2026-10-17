@@ -26,7 +26,7 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 | Monster damage | A percentage of the player's max HP, using Doom's damage numbers as percents, so a level 1 and a level 5 character face the same fight. NWN still rolls monster attacks, but a damage shield on the player (DR 50/+20) soaks the weapon damage; each hit then runs `doom_hit` (via the stock On Hit: Unique Power tag-based item script) for the real damage, at most once per monster cooldown. Zombie 3-12% (1.2 s), skeleton 4-10% (1.2 s), imp claw and fireball 3-24% (1.2 s), balor 10-30% (2 s). Tuned in `DoomSetupMelee` |
 | Monster speed | Zombies and imps +50%, skeletons -30% |
 | Balor | Rare (25% per wave from wave 3, one at a time), 40% slower, melee only, ~300 HP. The stock `nw_balorboss` loses all spell-like abilities (Implosion, Fire Storm, ...), its vorpal and other on-hit effects, and its damage reduction |
-| Imp fireballs | `doom_imp` strips the stock imp's Magic Missile (it always hits) and Invisibility. Imps run their own AI instead of NWN's: they keep 8-14 m away and stay within 30 degrees of where you are facing (on screen), sidestepping a little, backing off when rushed and clawing only when cornered. Every 2-4 s an imp that sees you at 3-30 m, and is on your screen (within 40 degrees of your facing; it moves there first, and only throws from off screen after 4 s of failing to), winds up and throws a fireball at where you stand: 6 m/s, straight line, stopped by walls. Strafe to dodge. Speed, range and timing are constants at the top of `doom_imp.nss` |
+| Imp fireballs | `doom_imp` strips the stock imp's Magic Missile (it always hits) and Invisibility. Imps run their own AI instead of NWN's: they keep 8-14 m away and stay within 30 degrees of where you are facing (on screen), sidestepping a little, backing off when rushed and clawing only when cornered. At most every 4-6 s (a clock-based cooldown) an imp that sees you at 3-30 m, and is on your screen (within 40 degrees of your facing; it moves there first, and only throws from off screen after 4 s of failing to), winds up and throws a fireball at where you stand: 6 m/s, straight line, stopped by walls. Strafe to dodge. Speed, range and timing are constants at the top of `doom_imp.nss` |
 | Death | No death panel; respawn at the start with a pistol after 3 s |
 
 ### Weapon keys
@@ -63,6 +63,11 @@ is slower than in Doom.
    punch and imp fireball sounds. Use the official `freedoom2.wad`:
    some repacked WADs ship empty sound stubs, and the tool warns when a
    sound has no audio (the game then stays silent for it).
+   The sounds are played through rows 10100-10105 that the tool appends to
+   the game's `visualeffects.2da` in the hak (`DOOM_VFX_*` in `doom_art.nss`):
+   applying an effect plays reliably, while `PlaySound` depends on the
+   playing object's action queue. Another hak that also replaces
+   `visualeffects.2da` would conflict.
 2. **Scripts:** `py tools/build.py` compiles `src/` with Beamdog's official
    `nwn_script_comp` and writes `build/nwn_doom.erf` (sources plus compiled
    `.ncs`). Run it again whenever a script in `src/` changes.

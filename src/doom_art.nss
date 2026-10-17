@@ -29,6 +29,14 @@ json DoomSpriteRect(string sResRef, float fScale)
     return NuiRect(x * fScale, (y - DOOM_ART_TOP) * fScale, w * fScale, h * fScale);
 }
 
+// Rows added to visualeffects.2da in the hak; applying one plays its sound.
+const int DOOM_VFX_PISTOL = 10100;
+const int DOOM_VFX_SHOTGUN = 10101;
+const int DOOM_VFX_PUNCH = 10102;
+const int DOOM_VFX_FIRESHOT = 10103;
+const int DOOM_VFX_FIRETRAIL = 10104;
+const int DOOM_VFX_FIREEXPL = 10105;
+
 // TRUE if the WAD provided this frame.
 int DoomHasSprite(string sResRef)
 {

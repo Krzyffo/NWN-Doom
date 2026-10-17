@@ -14,8 +14,8 @@
 const float  DOOM_IMP_TICK        = 0.5;
 const float  DOOM_IMP_MIN_RANGE   = 3.0;   // closer than this the imp claws instead
 const float  DOOM_IMP_MAX_RANGE   = 30.0;
-const int    DOOM_IMP_COOLDOWN_MIN = 4;    // in imp ticks: 2-4 s between throws
-const int    DOOM_IMP_COOLDOWN_MAX = 8;
+const int    DOOM_IMP_COOLDOWN_MIN_MS = 4000;  // at least 4 s between throws,
+const int    DOOM_IMP_COOLDOWN_MAX_MS = 6000;  // randomised so imps fire out of sync
 const float  DOOM_IMP_WINDUP      = 0.5;   // throw animation before release
 
 const float  DOOM_BALL_SPEED      = 6.0;   // m/s; NWN running is roughly 4 m/s
@@ -23,11 +23,12 @@ const float  DOOM_BALL_RANGE      = 35.0;
 const float  DOOM_BALL_HEIGHT     = 1.0;
 const float  DOOM_BALL_HIT_RADIUS = 0.9;
 const float  DOOM_BALL_TICK       = 0.05;  // also how often a flame is drawn
-const int    DOOM_BALL_VFX        = VFX_IMP_FLAME_S;
+const int    DOOM_BALL_VFX        = DOOM_VFX_FIRETRAIL;  // small flame, no sound
 const string DOOM_BALL_RESREF     = "plc_invisobj";
 
 const string DOOM_IMP_INIT_VAR = "DOOM_IMP_INIT";
-const string DOOM_IMP_CD_VAR   = "DOOM_IMP_CD";
+const string DOOM_IMP_CD_VAR   = "DOOM_IMP_CD";    // ms to wait after the last throw
+const string DOOM_IMP_LAST_VAR = "DOOM_IMP_LAST";  // GetMicrosecondCounter() at the last throw
 
 // ---- Fireball --------------------------------------------------------------
 
@@ -45,15 +46,8 @@ vector DoomGetVec(object o, string sVar)
 void DoomBallExplode(object oBall, vector vPos)
 {
     location lHere = Location(GetArea(oBall), vPos, 0.0);
-    ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_IMP_FLAME_M), lHere);
-    // The ball object itself stays at the launch point, so the explosion
-    // sound comes from a short-lived invisible object at the impact.
-    object oSound = CreateObject(OBJECT_TYPE_PLACEABLE, DOOM_BALL_RESREF, lHere);
-    if (GetIsObjectValid(oSound))
-    {
-        AssignCommand(oSound, PlaySound(DOOM_SND_FIREEXPL));
-        DestroyObject(oSound, 3.0);
-    }
+    // Big flame with the Doom explosion sound (row added in the hak).
+    DoomSfxAt(lHere, DOOM_VFX_FIREEXPL);
     DestroyObject(oBall);
 }
 
@@ -143,7 +137,7 @@ void DoomImpThrow(object oImp, vector vTarget)
     }
     SetUseableFlag(oBall, FALSE);
     SetPlotFlag(oBall, TRUE);
-    AssignCommand(oImp, PlaySound(DOOM_SND_FIRESHOT));
+    DoomSfx(oImp, DOOM_VFX_FIRESHOT);
 
     ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(DOOM_BALL_VFX), lSpawn);
     float fTime = DOOM_BALL_RANGE / DOOM_BALL_SPEED;
@@ -238,6 +232,21 @@ int DoomImpPickSpot(object oImp, object oPC)
     return FALSE;
 }
 
+// Throw cooldown on the clock, not in AI ticks, so nothing can shorten it.
+// The difference of two GetMicrosecondCounter() values stays correct when
+// the counter wraps, as long as less than ~35 minutes have passed.
+void DoomImpStartCooldown(object oImp, int nMinMs, int nMaxMs)
+{
+    SetLocalInt(oImp, DOOM_IMP_LAST_VAR, GetMicrosecondCounter());
+    SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(nMinMs, nMaxMs));
+}
+
+int DoomImpReady(object oImp)
+{
+    int nElapsedMs = (GetMicrosecondCounter() - GetLocalInt(oImp, DOOM_IMP_LAST_VAR)) / 1000;
+    return nElapsedMs < 0 || nElapsedMs >= GetLocalInt(oImp, DOOM_IMP_CD_VAR);
+}
+
 void DoomImpInit(object oImp)
 {
     // Remove NWN's always-hit Magic Missile and the invisibility ability.
@@ -254,7 +263,8 @@ void DoomImpInit(object oImp)
     SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_BLOCKED_BY_DOOR, "");
     SetLocalInt(oImp, DOOM_RANGED_VAR, TRUE);
 
-    SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(1, DOOM_IMP_COOLDOWN_MAX));
+    // First throw 1-6 s after spawning, so a fresh wave does not volley at once.
+    DoomImpStartCooldown(oImp, 1000, DOOM_IMP_COOLDOWN_MAX_MS);
     SetLocalInt(oImp, DOOM_IMP_INIT_VAR, TRUE);
 }
 
@@ -268,8 +278,6 @@ void main()
     object oPC = GetNearestCreature(CREATURE_TYPE_PLAYER_CHAR, PLAYER_CHAR_IS_PC, oImp);
     if (!GetIsObjectValid(oPC) || GetIsDead(oPC)) return;
 
-    int nCooldown = GetLocalInt(oImp, DOOM_IMP_CD_VAR) - 1;
-    SetLocalInt(oImp, DOOM_IMP_CD_VAR, nCooldown);
     int nBusy = GetLocalInt(oImp, DOOM_IMP_BUSY_VAR) - 1;
     SetLocalInt(oImp, DOOM_IMP_BUSY_VAR, nBusy);
     if (nBusy > 0) return;  // mid-throw or mid-claw
@@ -301,7 +309,7 @@ void main()
     // Throw when ready and the player is in sight, but get into the
     // player's view first so the fireball can be seen coming. If it cannot
     // get there (walls, tight corridors), it throws anyway after a while.
-    if (nCooldown <= 0 && fDist >= DOOM_IMP_MIN_RANGE && fDist <= DOOM_IMP_MAX_RANGE
+    if (DoomImpReady(oImp) && fDist >= DOOM_IMP_MIN_RANGE && fDist <= DOOM_IMP_MAX_RANGE
         && LineOfSightObject(oImp, oPC)
         && (bInView || nUnseen >= DOOM_IMP_PATIENCE))
     {
@@ -310,7 +318,7 @@ void main()
         SetFacingPoint(vTarget);
         PlayAnimation(ANIMATION_LOOPING_CONJURE1, 1.0, DOOM_IMP_WINDUP);
         DelayCommand(DOOM_IMP_WINDUP, DoomImpThrow(oImp, vTarget));
-        SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(DOOM_IMP_COOLDOWN_MIN, DOOM_IMP_COOLDOWN_MAX));
+        DoomImpStartCooldown(oImp, DOOM_IMP_COOLDOWN_MIN_MS, DOOM_IMP_COOLDOWN_MAX_MS);
         SetLocalInt(oImp, DOOM_IMP_BUSY_VAR, 2);
         return;
     }

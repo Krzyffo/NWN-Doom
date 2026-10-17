@@ -22,15 +22,6 @@ const int   DOOM_SHOTGUN_COOLDOWN_MS = 950;
 const float DOOM_SHOTGUN_SPLASH      = 2.5;  // stray pellets can hit enemies this close to the target
 const float DOOM_WEAPON_RANGE        = 40.0;
 
-// ---- Sounds --------------------------------------------------------------
-// WAVs extracted from the WAD into the hak by tools/wad_to_hak.py. A sound
-// the WAD did not have simply stays silent.
-const string DOOM_SND_PISTOL   = "dm_dspistol";
-const string DOOM_SND_SHOTGUN  = "dm_dsshotgn";
-const string DOOM_SND_PUNCH    = "dm_dspunch";
-const string DOOM_SND_FIRESHOT = "dm_dsfirsht";
-const string DOOM_SND_FIREEXPL = "dm_dsfirxpl";
-
 // ---- Ammo ----------------------------------------------------------------
 const int DOOM_START_BULLETS = 50;
 const int DOOM_MAX_BULLETS   = 200;
@@ -116,6 +107,24 @@ int DoomPercentDamage(object oTarget, int nMinPct, int nMaxPct)
     int nDamage = (GetMaxHitPoints(oTarget) * DoomRandomRange(nMinPct, nMaxPct) + 50) / 100;
     if (nDamage < 1) nDamage = 1;
     return nDamage;
+}
+
+// ---- Sounds ----
+// Doom sounds are played as visual effects: wad_to_hak.py adds rows to
+// visualeffects.2da (DOOM_VFX_* in doom_art) whose impact sound is the
+// extracted WAV. PlaySound was unreliable: it goes through the playing
+// object's action queue, and sounds from freshly created objects never
+// reached the client at all. Effects play immediately and positionally.
+
+// Plays effect nVfx (and so its sound) on oSource; follows it if it moves.
+void DoomSfx(object oSource, int nVfx)
+{
+    ApplyEffectToObject(DURATION_TYPE_INSTANT, EffectVisualEffect(nVfx), oSource);
+}
+
+void DoomSfxAt(location lWhere, int nVfx)
+{
+    ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(nVfx), lWhere);
 }
 
 void DoomMessage(object oPC, string sMsg)

@@ -19,7 +19,7 @@ SRC = os.path.join(ROOT, "src")
 NCS = os.path.join(ROOT, "build", "ncs")
 OUT = os.path.join(ROOT, "build", "nwn_doom.erf")
 
-RES_TYPES = {"tga": 3, "wav": 4, "nss": 2009, "ncs": 2010}
+RES_TYPES = {"tga": 3, "wav": 4, "nss": 2009, "ncs": 2010, "2da": 2017}
 TYPE_EXT = {v: k for k, v in RES_TYPES.items()}
 HEADER_SIZE = 160
 KEY_SIZE = 24
