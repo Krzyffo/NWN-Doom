@@ -76,6 +76,19 @@ def build(out_path):
     write_erf(out_path, paths)
 
 
+def read_erf(path):
+    """Return [(resref, restype, data)] for every resource in an ERF/HAK/MOD."""
+    with open(path, "rb") as f:
+        blob = f.read()
+    _sig, _ver, _lc, _ls, count, _ol, off_keys, off_res = struct.unpack_from("<4s4sIIIIII", blob, 0)
+    entries = []
+    for i in range(count):
+        resref, _rid, rtype, _ = struct.unpack_from("<16sIHH", blob, off_keys + i * KEY_SIZE)
+        offset, size = struct.unpack_from("<II", blob, off_res + i * RES_SIZE)
+        entries.append((resref.rstrip(b"\0").decode("latin-1").lower(), rtype, blob[offset:offset + size]))
+    return entries
+
+
 def list_erf(path):
     with open(path, "rb") as f:
         blob = f.read()
