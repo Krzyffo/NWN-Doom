@@ -1,0 +1,5 @@
+*.ncs
+*.ndb
+build/
+__pycache__/
+tools/neverwinter/
