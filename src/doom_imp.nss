@@ -4,10 +4,10 @@
 // the moment of the throw, so strafing dodges them. They keep their
 // distance and stay in view of the player (see the AI tick below).
 //
-// A fireball is an invisible placeable carrying a fire effect. Its motion
-// is shown with a linear visual-transform lerp (smooth on the client),
-// while the script recomputes the same position from elapsed time every
-// DOOM_BALL_TICK s to test for hits and walls.
+// A fireball is a script loop carried by an invisible placeable. Every
+// DOOM_BALL_TICK s it computes the ball's position from elapsed time,
+// draws a fire burst there (in world coordinates, so the flames always
+// follow the real path) and tests for hits and walls.
 
 #include "doom_inc"
 
@@ -22,8 +22,8 @@ const float  DOOM_BALL_SPEED      = 6.0;   // m/s; NWN running is roughly 4 m/s
 const float  DOOM_BALL_RANGE      = 35.0;
 const float  DOOM_BALL_HEIGHT     = 1.0;
 const float  DOOM_BALL_HIT_RADIUS = 0.9;
-const float  DOOM_BALL_TICK       = 0.1;
-const float  DOOM_BALL_SCALE      = 0.35;  // shrinks the fire effect to a ball
+const float  DOOM_BALL_TICK       = 0.05;  // also how often a flame is drawn
+const int    DOOM_BALL_VFX        = VFX_IMP_FLAME_S;
 const string DOOM_BALL_RESREF     = "plc_invisobj";
 
 const string DOOM_IMP_INIT_VAR = "DOOM_IMP_INIT";
@@ -57,7 +57,7 @@ void DoomBallTick(object oBall)
     vector vDir = DoomGetVec(oBall, "DOOM_BALL_DIR");
     vector vLast = DoomGetVec(oBall, "DOOM_BALL_LAST");
 
-    // Position from elapsed time, matching the client-side lerp.
+    // Position from elapsed time, so the speed does not depend on tick jitter.
     int nElapsedMs = (GetMicrosecondCounter() - GetLocalInt(oBall, "DOOM_BALL_T0")) / 1000;
     if (nElapsedMs < 0) nElapsedMs = FloatToInt(DOOM_BALL_RANGE / DOOM_BALL_SPEED * 1000.0);  // counter wrapped
     float fDist = DOOM_BALL_SPEED * IntToFloat(nElapsedMs) / 1000.0;
@@ -71,8 +71,10 @@ void DoomBallTick(object oBall)
         return;
     }
 
-    // Players in the way.
     location lPos = Location(GetArea(oBall), vPos, 0.0);
+    ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(DOOM_BALL_VFX), lPos);
+
+    // Players in the way.
     object oHit = GetFirstObjectInShape(SHAPE_SPHERE, DOOM_BALL_HIT_RADIUS, lPos, FALSE, OBJECT_TYPE_CREATURE);
     while (GetIsObjectValid(oHit))
     {
@@ -115,8 +117,8 @@ void DoomImpThrow(object oImp, vector vTarget)
     vector vOrigin = vStart + vDir * 0.6;
     vOrigin.z += DOOM_BALL_HEIGHT;
 
-    // Facing 0 so the object's local axes are the world axes for the lerp.
-    location lSpawn = Location(GetArea(oImp), vStart + vDir * 0.6, 0.0);
+    // The placeable only carries the tick loop and its state; it stays put.
+    location lSpawn = Location(GetArea(oImp), vOrigin, 0.0);
     object oBall = CreateObject(OBJECT_TYPE_PLACEABLE, DOOM_BALL_RESREF, lSpawn);
     if (!GetIsObjectValid(oBall))
     {
@@ -126,16 +128,8 @@ void DoomImpThrow(object oImp, vector vTarget)
     SetUseableFlag(oBall, FALSE);
     SetPlotFlag(oBall, TRUE);
 
-    ApplyEffectToObject(DURATION_TYPE_PERMANENT, EffectVisualEffect(VFX_DUR_INFERNO_NO_SOUND), oBall);
-    ApplyEffectToObject(DURATION_TYPE_PERMANENT, EffectVisualEffect(VFX_DUR_LIGHT_ORANGE_5), oBall);
-    SetObjectVisualTransform(oBall, OBJECT_VISUAL_TRANSFORM_SCALE, DOOM_BALL_SCALE);
-    SetObjectVisualTransform(oBall, OBJECT_VISUAL_TRANSFORM_TRANSLATE_Z, DOOM_BALL_HEIGHT);
-
+    ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(DOOM_BALL_VFX), lSpawn);
     float fTime = DOOM_BALL_RANGE / DOOM_BALL_SPEED;
-    SetObjectVisualTransform(oBall, OBJECT_VISUAL_TRANSFORM_TRANSLATE_X, vDir.x * DOOM_BALL_RANGE,
-                             OBJECT_VISUAL_TRANSFORM_LERP_LINEAR, fTime);
-    SetObjectVisualTransform(oBall, OBJECT_VISUAL_TRANSFORM_TRANSLATE_Y, vDir.y * DOOM_BALL_RANGE,
-                             OBJECT_VISUAL_TRANSFORM_LERP_LINEAR, fTime);
 
     SetLocalObject(oBall, "DOOM_BALL_OWNER", oImp);
     DoomSetVec(oBall, "DOOM_BALL_ORIGIN", vOrigin);
