@@ -80,9 +80,12 @@ is slower than in Doom.
    still runs the stock `x2_mod_def_load`.
 7. **Build > Build Module** (make sure "Compile scripts" is ticked) and
    check the output for compile errors. Then save.
-8. Optional: place waypoints tagged `DOOM_SPAWN` where monsters should
+8. Optional: paste [docs/module_description.txt](docs/module_description.txt)
+   into **Edit > Module Properties > Description**. It explains the controls
+   on the game's module selection screen.
+9. Optional: place waypoints tagged `DOOM_SPAWN` where monsters should
    appear. Without them, monsters spawn in a ring 10-15 m around the player.
-9. Test: **File > Test Module** in the toolset, or start the game, choose
+10. Test: **File > Test Module** in the toolset, or start the game, choose
    **New > Module**, pick the module and a character.
 
 The saved module and the hak live in your NWN user directory (`modules`,
