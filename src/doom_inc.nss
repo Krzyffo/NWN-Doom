@@ -59,6 +59,7 @@ const string DOOM_VAR_FPS      = "DOOM_FPS";
 const string DOOM_VAR_HUD      = "DOOM_HUD";
 const string DOOM_VAR_LAST_HP  = "DOOM_LAST_HP";
 const string DOOM_VAR_ANIM     = "DOOM_ANIM";
+const string DOOM_RANGED_VAR   = "DOOM_RANGED";   // on monsters with their own AI (imps)
 const string DOOM_HUD_ID       = "doom_hud";
 
 // ---- Quickbar weapon items -----------------------------------------------
@@ -637,7 +638,8 @@ object DoomSpawnMonster(string sResRef, location lLoc, object oPC, string sTag =
     if (nSpeed < 0) eSpeed = EffectMovementSpeedDecrease(-nSpeed);
     ApplyEffectToObject(DURATION_TYPE_PERMANENT, SupernaturalEffect(eSpeed), oMon);
 
-    if (GetIsObjectValid(oPC))
+    // Melee monsters charge at once; imps run their own AI (doom_imp).
+    if (GetIsObjectValid(oPC) && !GetLocalInt(oMon, DOOM_RANGED_VAR))
         AssignCommand(oMon, ActionAttack(oPC));
 
     object oMod = GetModule();

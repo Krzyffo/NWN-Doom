@@ -11,8 +11,9 @@ void DoomHit(object oPC, object oVictim, int nDamage)
     AssignCommand(oPC, ApplyEffectToObject(DURATION_TYPE_INSTANT,
         EffectDamage(nDamage, DAMAGE_TYPE_PIERCING), oVictim));
     ApplyEffectToObject(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_COM_BLOOD_REG_RED), oVictim);
-    // Shooting a monster always draws its attention, Doom style.
-    if (!GetIsDead(oVictim))
+    // Shooting a monster always draws its attention, Doom style
+    // (except imps, which keep their distance on their own).
+    if (!GetIsDead(oVictim) && !GetLocalInt(oVictim, DOOM_RANGED_VAR))
         AssignCommand(oVictim, ActionAttack(oPC));
 }
 

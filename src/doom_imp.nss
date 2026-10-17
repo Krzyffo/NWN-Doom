@@ -1,8 +1,8 @@
 // doom_imp: imp AI tick, run on each spawned imp every DOOM_IMP_TICK s.
 // Imps lose NWN's Magic Missile (which always hits) and instead throw
 // Doom-style fireballs: slow, straight, aimed where the player stands at
-// the moment of the throw, so strafing dodges them. NWN's own AI still
-// handles walking and melee.
+// the moment of the throw, so strafing dodges them. They keep their
+// distance and stay in view of the player (see the AI tick below).
 //
 // A fireball is an invisible placeable carrying a fire effect. Its motion
 // is shown with a linear visual-transform lerp (smooth on the client),
@@ -148,11 +148,97 @@ void DoomImpThrow(object oImp, vector vTarget)
 }
 
 // ---- Imp AI tick -----------------------------------------------------------
+// Imps are ranged skirmishers: they try to stand DOOM_IMP_KEEP_MIN..MAX
+// from the player and within DOOM_IMP_FOV degrees of where the player is
+// facing, so they are on screen, throwing fireballs on a cooldown. They
+// back off when rushed and only claw when cornered. NWN's own AI scripts
+// are removed from imps; this tick is their whole brain.
+
+const float DOOM_IMP_KEEP_MIN  = 8.0;    // preferred distance band
+const float DOOM_IMP_KEEP_MAX  = 14.0;
+const float DOOM_IMP_KEEP_PREF = 11.0;
+const float DOOM_IMP_FOV       = 30.0;   // stay within +-this many degrees of the player's facing
+const float DOOM_IMP_DRIFT     = 12.0;   // random sidestep around its spot, degrees
+const float DOOM_IMP_CORNERED  = 2.2;    // closer than this it claws instead
+const float DOOM_IMP_REPATH    = 2.0;    // only re-path if the spot moved this far
+
+const string DOOM_IMP_BUSY_VAR  = "DOOM_IMP_BUSY";
+const string DOOM_IMP_DRIFT_VAR = "DOOM_IMP_DRIFTV";
+const string DOOM_IMP_GOAL_VAR  = "DOOM_IMP_GOAL";
+
+// a - b, wrapped to -180..180.
+float DoomAngleDiff(float a, float b)
+{
+    float d = a - b;
+    while (d > 180.0) d -= 360.0;
+    while (d < -180.0) d += 360.0;
+    return d;
+}
+
+// TRUE if vPos is on the walkmesh and the player could see an imp there.
+int DoomImpSpotOk(object oArea, vector vEye, vector vPos)
+{
+    if (GetSurfaceMaterial(Location(oArea, vPos, 0.0)) == 0) return FALSE;
+    vector vHead = vPos;
+    vHead.z += 1.0;
+    return LineOfSightVector(vEye, vHead);
+}
+
+// Finds where the imp wants to stand: on its side of the player's view,
+// pulled into the FOV, at the preferred distance. Falls back to closer
+// and more central spots when walls or the walkmesh get in the way.
+// Stores the spot in DOOM_IMP_GOAL_VAR; returns FALSE if none was usable.
+int DoomImpPickSpot(object oImp, object oPC)
+{
+    vector vPC = GetPosition(oPC);
+    vector vEye = vPC;
+    vEye.z += 1.5;
+    object oArea = GetArea(oPC);
+    float fFacing = GetFacing(oPC);
+
+    float fRel = DoomAngleDiff(VectorToAngle(GetPosition(oImp) - vPC), fFacing);
+    fRel += GetLocalFloat(oImp, DOOM_IMP_DRIFT_VAR);
+    if (fRel > DOOM_IMP_FOV) fRel = DOOM_IMP_FOV;
+    if (fRel < -DOOM_IMP_FOV) fRel = -DOOM_IMP_FOV;
+
+    float fDist = GetDistanceBetween(oImp, oPC);
+    if (fDist < DOOM_IMP_KEEP_MIN || fDist > DOOM_IMP_KEEP_MAX) fDist = DOOM_IMP_KEEP_PREF;
+
+    // Try the ideal spot, then shorter distances, then angles nearer the centre.
+    int nAngle;
+    for (nAngle = 0; nAngle < 3; nAngle++)
+    {
+        float fA = fRel * (1.0 - 0.5 * IntToFloat(nAngle));
+        float fD;
+        for (fD = fDist; fD >= 4.0; fD -= 2.0)
+        {
+            vector vSpot = vPC + AngleToVector(fFacing + fA) * fD;
+            if (DoomImpSpotOk(oArea, vEye, vSpot))
+            {
+                DoomSetVec(oImp, DOOM_IMP_GOAL_VAR, vSpot);
+                return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
 
 void DoomImpInit(object oImp)
 {
     // Remove NWN's always-hit Magic Missile and the invisibility ability.
     DoomStripSpellAbilities(oImp);
+
+    // Take the imp away from NWN's combat AI, which always charges into melee.
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_HEARTBEAT, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_NOTICE, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_SPELLCASTAT, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_MELEE_ATTACKED, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_DAMAGED, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_DISTURBED, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_END_COMBATROUND, "");
+    SetEventScript(oImp, EVENT_SCRIPT_CREATURE_ON_BLOCKED_BY_DOOR, "");
+    SetLocalInt(oImp, DOOM_RANGED_VAR, TRUE);
+
     SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(1, DOOM_IMP_COOLDOWN_MAX));
     SetLocalInt(oImp, DOOM_IMP_INIT_VAR, TRUE);
 }
@@ -162,26 +248,64 @@ void main()
     object oImp = OBJECT_SELF;
     if (!GetIsObjectValid(oImp) || GetIsDead(oImp)) return;
     if (!GetLocalInt(oImp, DOOM_IMP_INIT_VAR)) DoomImpInit(oImp);
+    DelayCommand(DOOM_IMP_TICK, ExecuteScript("doom_imp", oImp));
+
+    object oPC = GetNearestCreature(CREATURE_TYPE_PLAYER_CHAR, PLAYER_CHAR_IS_PC, oImp);
+    if (!GetIsObjectValid(oPC) || GetIsDead(oPC)) return;
 
     int nCooldown = GetLocalInt(oImp, DOOM_IMP_CD_VAR) - 1;
     SetLocalInt(oImp, DOOM_IMP_CD_VAR, nCooldown);
+    int nBusy = GetLocalInt(oImp, DOOM_IMP_BUSY_VAR) - 1;
+    SetLocalInt(oImp, DOOM_IMP_BUSY_VAR, nBusy);
+    if (nBusy > 0) return;  // mid-throw or mid-claw
 
-    object oPC = GetNearestCreature(CREATURE_TYPE_PLAYER_CHAR, PLAYER_CHAR_IS_PC, oImp);
-    if (nCooldown <= 0 && GetIsObjectValid(oPC) && !GetIsDead(oPC))
+    // Now and then pick a new sidestep so it does not stand still.
+    if (Random(4) == 0)
+        SetLocalFloat(oImp, DOOM_IMP_DRIFT_VAR,
+                      IntToFloat(Random(FloatToInt(DOOM_IMP_DRIFT) * 2 + 1)) - DOOM_IMP_DRIFT);
+
+    float fDist = GetDistanceBetween(oImp, oPC);
+
+    // Cornered: claw.
+    if (fDist < DOOM_IMP_CORNERED)
     {
-        float fDist = GetDistanceBetween(oImp, oPC);
-        if (fDist >= DOOM_IMP_MIN_RANGE && fDist <= DOOM_IMP_MAX_RANGE && LineOfSightObject(oImp, oPC))
-        {
-            // Wind up, throw at where the player stands now, then resume the chase.
-            vector vTarget = GetPosition(oPC);
-            ClearAllActions();
-            SetFacingPoint(vTarget);
-            PlayAnimation(ANIMATION_LOOPING_CONJURE1, 1.0, DOOM_IMP_WINDUP);
-            DelayCommand(DOOM_IMP_WINDUP, DoomImpThrow(oImp, vTarget));
-            DelayCommand(DOOM_IMP_WINDUP + 0.1, ActionAttack(oPC));
-            SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(DOOM_IMP_COOLDOWN_MIN, DOOM_IMP_COOLDOWN_MAX));
-        }
+        ClearAllActions();
+        ActionAttack(oPC);
+        SetLocalInt(oImp, DOOM_IMP_BUSY_VAR, 3);
+        return;
     }
 
-    DelayCommand(DOOM_IMP_TICK, ExecuteScript("doom_imp", oImp));
+    // Throw when ready and the player is in sight.
+    if (nCooldown <= 0 && fDist >= DOOM_IMP_MIN_RANGE && fDist <= DOOM_IMP_MAX_RANGE
+        && LineOfSightObject(oImp, oPC))
+    {
+        vector vTarget = GetPosition(oPC);
+        ClearAllActions();
+        SetFacingPoint(vTarget);
+        PlayAnimation(ANIMATION_LOOPING_CONJURE1, 1.0, DOOM_IMP_WINDUP);
+        DelayCommand(DOOM_IMP_WINDUP, DoomImpThrow(oImp, vTarget));
+        SetLocalInt(oImp, DOOM_IMP_CD_VAR, DoomRandomRange(DOOM_IMP_COOLDOWN_MIN, DOOM_IMP_COOLDOWN_MAX));
+        SetLocalInt(oImp, DOOM_IMP_BUSY_VAR, 2);
+        return;
+    }
+
+    // Otherwise move towards its spot: in view, at range.
+    vector vOldGoal = DoomGetVec(oImp, DOOM_IMP_GOAL_VAR);
+    if (!DoomImpPickSpot(oImp, oPC))
+    {
+        // No good spot (tight corridor): at least keep away from the player.
+        if (fDist < DOOM_IMP_KEEP_MIN)
+        {
+            ClearAllActions();
+            ActionMoveAwayFromObject(oPC, TRUE, DOOM_IMP_KEEP_PREF);
+        }
+        return;
+    }
+    vector vGoal = DoomGetVec(oImp, DOOM_IMP_GOAL_VAR);
+    if (VectorMagnitude(vGoal - GetPosition(oImp)) < 1.0)
+        return;  // already there
+    if (GetCurrentAction(oImp) == ACTION_MOVETOPOINT && VectorMagnitude(vGoal - vOldGoal) < DOOM_IMP_REPATH)
+        return;  // already on its way to roughly the same spot
+    ClearAllActions();
+    ActionMoveToLocation(Location(GetArea(oImp), vGoal, VectorToAngle(GetPosition(oPC) - vGoal)), TRUE);
 }
