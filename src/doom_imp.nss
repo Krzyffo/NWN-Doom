@@ -74,11 +74,19 @@ void DoomBallTick(object oBall)
     location lPos = Location(GetArea(oBall), vPos, 0.0);
     ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(DOOM_BALL_VFX), lPos);
 
-    // Players in the way.
-    object oHit = GetFirstObjectInShape(SHAPE_SPHERE, DOOM_BALL_HIT_RADIUS, lPos, FALSE, OBJECT_TYPE_CREATURE);
+    // Players in the way. Creature positions are at their feet while the
+    // ball flies at chest height, so measure horizontal distance and allow
+    // a generous height difference (a plain 3D sphere never reached them).
+    float fSearch = DOOM_BALL_HIT_RADIUS + 2.0;
+    object oHit = GetFirstObjectInShape(SHAPE_SPHERE, fSearch, lPos, FALSE, OBJECT_TYPE_CREATURE);
     while (GetIsObjectValid(oHit))
     {
-        if (GetIsPC(oHit) && !GetIsDead(oHit))
+        vector vOff = GetPosition(oHit) - vPos;
+        float fDz = vOff.z;
+        vOff.z = 0.0;
+        if (GetIsPC(oHit) && !GetIsDead(oHit)
+            && VectorMagnitude(vOff) <= DOOM_BALL_HIT_RADIUS
+            && fDz > -(DOOM_BALL_HEIGHT + 1.0) && fDz < 1.0)
         {
             // Doom imp fireball: 3-24, as % of the player's max HP.
             effect eDamage = EffectDamage(DoomPercentDamage(oHit, 3, 24), DAMAGE_TYPE_FIRE);
@@ -90,7 +98,7 @@ void DoomBallTick(object oBall)
             DoomBallExplode(oBall, vPos);
             return;
         }
-        oHit = GetNextObjectInShape(SHAPE_SPHERE, DOOM_BALL_HIT_RADIUS, lPos, FALSE, OBJECT_TYPE_CREATURE);
+        oHit = GetNextObjectInShape(SHAPE_SPHERE, fSearch, lPos, FALSE, OBJECT_TYPE_CREATURE);
     }
 
     if (fDist >= DOOM_BALL_RANGE)
