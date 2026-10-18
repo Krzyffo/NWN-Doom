@@ -87,7 +87,7 @@ def read_ifo(entries):
     if ifo is None:
         fail("module.ifo not found in the module")
     if not os.path.exists(GFF_TOOL):
-        fail(f"{GFF_TOOL} not found; it comes with the neverwinter.nim tools (see README)")
+        fail(f"{GFF_TOOL} not found; it comes with the neverwinter.nim tools (see docs/building.md)")
     tmp = os.path.join(ROOT, "build", "package_module.ifo")
     os.makedirs(os.path.dirname(tmp), exist_ok=True)
     with open(tmp, "wb") as f:

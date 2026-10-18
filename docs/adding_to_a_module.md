@@ -3,7 +3,7 @@
 This walks through turning an existing NWN:EE module, for example a story
 module or a chapter of the official campaign, into a Doom-style game. The
 background (which events NWN-Doom takes over, the variables it reads) is
-in the README section "Using NWN-Doom in another module".
+in [how_it_works.md](how_it_works.md).
 
 You need the toolset (`bin\win32\nwtoolset.exe` in the game folder), Python
 (`py`), and this repository.

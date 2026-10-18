@@ -77,7 +77,7 @@ def main():
     if not os.path.exists(path):
         sys.exit(f"{path} not found")
     if not os.path.exists(GFF_TOOL):
-        sys.exit(f"{GFF_TOOL} not found; it comes with the neverwinter.nim tools (see README)")
+        sys.exit(f"{GFF_TOOL} not found; it comes with the neverwinter.nim tools (see docs/building.md)")
 
     data = gff_to_json(path)
     if data.get("__data_type", "").strip() != "BIC":
