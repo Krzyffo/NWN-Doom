@@ -13,9 +13,10 @@ dropping from kills. Plain NWScript, art and sounds from
 2. Unzip it into your NWN user folder (normally
    `Documents\Neverwinter Nights`).
 3. Start the game, **New > Module**, pick **doom-test**, and play with any
-   character; monster damage scales with your hit points.
-4. Once per character, drag the inventory items `1: Fist`, `2: Pistol` and
-   `3: Shotgun` onto F1-F3.
+   level 1-5 character; monster damage scales with your hit points.
+4. At the start of each new game, drag the inventory items `1: Fist`,
+   `2: Pistol` and `3: Shotgun` onto F1-F3 (or use the text macros below,
+   which stay).
 
 Requires NWN: Enhanced Edition.
 
@@ -40,8 +41,8 @@ running, and turns the module's hostile creatures into Doom monsters.
 
 Faster weapon keys: quickbar text macros saying `/1`, `/2`, `/3` switch
 instantly. With this repository and Python, `py tools/doom_quickbar.py
-CHARACTER` puts them on a character's F1-F3 for you (it backs the
-character file up first).
+CHARACTER` puts them on a character's F1-F3 in the character file, so they
+are there in every new game (it backs the file up first).
 
 ## Chat commands
 

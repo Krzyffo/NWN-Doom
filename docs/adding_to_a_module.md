@@ -44,7 +44,7 @@ and cannot be opened in the toolset.
 
 If the toolset refuses to open some other module, it is usually missing a
 hak or `.tlk` file the module needs: put those in the `hak` and `tlk`
-folders of your NWN user directory.
+folders of your NWN user folder.
 
 ## 3. Add the hak
 
@@ -67,10 +67,11 @@ Open **Edit > Module Properties > Events** and look at **OnModuleLoad**:
 
 - **Empty or `x2_mod_def_load`:** replace it with `doom_modload`. It runs
   `x2_mod_def_load` itself.
-- **Any other script** (the official chapters have their own): leave it in
-  place, open that script (**Scripts** in the module tree, or the edit
-  button next to the event) and add this as the last line of its
-  `void main()`:
+- **Any other script** (for example `x1_onload` in Shadows of
+  Undrentide, `loadmodule` in Hordes of the Underdark; the original
+  campaign's chapters have none): leave it in place, open that script
+  (**Scripts** in the module tree, or the edit button next to the event)
+  and add this as the last line of its `void main()`:
 
   ```c
   ExecuteScript("doom_modload", OBJECT_SELF);
@@ -87,7 +88,10 @@ scripts for them.
 ## 6. Optional: waves and tuning
 
 Variables are set under **Advanced > Variables** in Module Properties (for
-the whole module) or Area Properties (for one area). All are `int`.
+the whole module) or Area Properties (for one area). All are `int`. For
+the last three, an area's own value replaces the module's; set it to `-1`
+to switch a module-wide setting off in that area. `DOOM_WAVES` on the
+module turns waves on everywhere.
 
 | Variable | Where | Effect |
 |---|---|---|
@@ -132,5 +136,5 @@ your hit points.
 - `/doom` off and on again restores everything.
 
 If something goes wrong, the game log is in the `logs` folder of your NWN
-user directory (`nwclientLog1.txt`), and `/debug` in chat logs every gun
+user folder (`nwclientLog1.txt`), and `/debug` in chat logs every gun
 click.

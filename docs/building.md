@@ -62,7 +62,7 @@ compiles them.
 7. **Build > Build Module** with "Compile scripts" ticked, check for
    errors, save, and **File > Test Module**.
 
-The module and the hak live in your NWN user directory (`modules`, `hak`),
+The module and the hak live in your NWN user folder (`modules`, `hak`),
 normally `Documents\Neverwinter Nights`; the `[Alias]` section of `nwn.ini`
 can move it (on the dev machine it is `G:\nwnData`). Logs are under `logs`.
 The tools read the location from the `NWN_USER` environment variable when

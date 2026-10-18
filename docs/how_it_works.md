@@ -52,7 +52,10 @@ runs only if you mean to replace NWN-Doom's.
 ## Module variables
 
 All are `int` locals, set under Advanced > Variables in Module Properties
-or Area Properties. An area's own value wins over the module's.
+or Area Properties. `DOOM_WAVES` = 1 on either turns waves on (on the
+module: everywhere). For the other three, an area's own non-zero value
+replaces the module's, so `-1` switches a module-wide setting off in one
+area. Conversion reads them for the creature's area when it is converted.
 
 | Variable | Default | Effect |
 |---|---|---|
