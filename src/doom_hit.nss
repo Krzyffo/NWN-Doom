@@ -14,6 +14,9 @@ void main()
     object oMon = OBJECT_SELF;
     object oTarget = GetSpellTargetObject();
     if (!GetIsPC(oTarget) || GetIsDead(oTarget)) return;
+    // Without Doom mode the player has no damage shield and takes the
+    // weapon's own damage instead.
+    if (!DoomIsOn(oTarget)) return;
 
     // One damaging hit per cooldown, however many attacks NWN gives it.
     int nNow = GetMicrosecondCounter();

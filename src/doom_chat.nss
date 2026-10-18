@@ -1,5 +1,6 @@
 // doom_chat: module OnPlayerChat. Debug and fallback commands; weapons are
-// normally switched with the F1-F3 quickbar items.
+// normally switched with the F1-F3 quickbar items. Anything that is not a
+// Doom command goes on to the module's own chat script.
 
 #include "doom_inc"
 
@@ -7,7 +8,24 @@ void main()
 {
     object oPC = GetPCChatSpeaker();
     string sMsg = GetStringLowerCase(GetPCChatMessage());
-    if (GetStringLeft(sMsg, 1) != "/") return;
+
+    // /doom works with Doom mode off too: it is how you switch it back on.
+    if (sMsg == "/doom" || sMsg == "/doom on" || sMsg == "/doom off")
+    {
+        int bOn = !DoomIsOn(oPC);
+        if (sMsg == "/doom on")  bOn = TRUE;
+        if (sMsg == "/doom off") bOn = FALSE;
+        DoomSetMode(oPC, bOn);
+        SetPCChatMessage("");
+        return;
+    }
+
+    // With Doom mode off, the other commands are not ours either.
+    if (GetStringLeft(sMsg, 1) != "/" || !DoomIsOn(oPC))
+    {
+        DoomRunOriginal(EVENT_SCRIPT_MODULE_ON_PLAYER_CHAT);
+        return;
+    }
 
     if (sMsg == "/1")
         DoomSelectWeapon(oPC, DOOM_WEAPON_FIST);
@@ -90,7 +108,10 @@ void main()
         DoomHudOpen(oPC);
     }
     else
-        return;  // not ours, let it through
+    {
+        DoomRunOriginal(EVENT_SCRIPT_MODULE_ON_PLAYER_CHAT);  // not ours, let it through
+        return;
+    }
 
     SetPCChatMessage("");  // swallow the command
     DoomHudUpdate(oPC);

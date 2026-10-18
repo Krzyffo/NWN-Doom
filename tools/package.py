@@ -108,6 +108,14 @@ def check_module(mod_path):
     if on_load != "doom_modload":
         errors.append(f"OnModuleLoad is '{on_load}', not doom_modload (Module Properties > Events)")
 
+    # The arena relies on the waves, which only run where DOOM_WAVES = 1.
+    waves = [v for v in gff_value(ifo, "VarTable", [])
+             if v.get("Name", {}).get("value") == "DOOM_WAVES"
+             and v.get("Value", {}).get("value") == 1]
+    if not waves:
+        errors.append("the module has no int variable DOOM_WAVES = 1, so no waves spawn "
+                      "(Module Properties > Advanced > Variables)")
+
     compiled = {resref for resref, rtype, _ in entries if rtype == RES_NCS}
     for name in sorted(os.listdir(build_erf.SRC)):
         if not (name.startswith("doom_") and name.endswith(".nss")):

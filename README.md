@@ -14,7 +14,7 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 |---|---|
 | First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility. Stiff chase camera with camera turning and tilting disabled and the pitch pinned (`DOOM_CAM_PITCH`), so the view always looks straight ahead where the character faces, like Doom (`/lockcam` toggles this) |
 | Moving | NWN's own WASD movement, 50% faster than normal: the engine caps movement bonuses at +50% (measured; +99% and Haste give no more). Backwards and sideways NWN moves at walking pace, about 3 and 1.6 m/s against 6 m/s forwards, and no effect gets past the cap to change that. Turning speed is the client's Options > Controls camera turn speed, which the module cannot change; the default (1.0, the minimum) feels stiff, so raise it |
-| Shooting | The player is kept in targeting mode, so every click fires `doom_target`. Shots go straight along the player's facing (the locked camera keeps it at the centre crosshair), not to the cursor: each bullet or pellet is a hitscan ray that hits the first monster on the line within its body radius + 0.4 m aim assist and in line of sight, with no attack roll. Misses spark on the wall the ray reaches. Players are never hit |
+| Shooting | The player is kept in targeting mode, so every click fires `doom_target`. Shots go straight along the player's facing (the locked camera keeps it at the centre crosshair), not to the cursor: each bullet or pellet is a hitscan ray that hits the first monster on the line within its body radius + 0.4 m aim assist and in line of sight, with no attack roll. Misses spark on the wall the ray reaches. Players, and creatures that are not hostile to the shooter (friendly or neutral NPCs, henchmen, summons), are never hit |
 | Weapons | 1 Fist (2-20, 2.5 m reach, more aim assist), 2 Pistol (5-15 per shot; the first shot is exact, rapid follow-ups spread up to 5.6 degrees like Doom), 3 Shotgun (7 pellets of 5-15, each its own ray with Doom's 5.6 degree spread). Fire-rate cooldowns per weapon. Tuned at the top of `doom_inc.nss` |
 | Switching weapons | Text macros on F1-F3 that send `/1` `/2` `/3` (instant), added to a character file by `tools/doom_quickbar.py`; or the three inventory items `1: Fist`, `2: Pistol`, `3: Shotgun` dragged onto the quickbar (1 s item activation) |
 | Cursor | In gun mode the pointer is a small red dot: targeting uses the stock DM kill cursor (`MOUSECURSOR_KILL`), whose TGA and DDS images the hak replaces (the dot sits at the top-left click point, like the stock cursors' tips). Shots go to the centre crosshair, but the sky cannot be clicked in targeting mode, so the dot shows where the pointer is: keep it on the ground or on monsters. `/cursor` switches to the visible attack cursor |
@@ -22,14 +22,15 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 | HUD | Doom's status bar (ammo, health %, arms panel, Doomguy's face, armor %, ammo table) and the weapon sprite with firing frames and muzzle flash, drawn with NUI. The face follows Doom: five health levels, idle glances, the rampage face when firing, a turn when hurt, "ouch" on hits of 20% or more, the evil grin on picking up the shotgun, and the dead face |
 | Pickups from kills | `doom_mdeath` rolls a drop: clip, shells, stimpack, armor bonus, or the shotgun. Walking over a pickup collects it |
 | Armor | Absorbs a third of incoming damage until depleted |
-| Doors | Click a door within 3 m to open it; locked doors need their key item |
-| Waves | Wave 1 spawns on entering; each cleared wave triggers a bigger one 5 s later. Zombies and imps from wave 1, skeletons from wave 3 |
+| Doors and using things | Click a door within 3 m to open it; locked doors need their key item. In the same way, clicking a friendly NPC within 3 m talks to it, a usable placeable (chest, lever) is used, and an item on the ground is picked up |
+| Waves | Only where the module or the area has the variable `DOOM_WAVES` = 1. Wave 1 spawns 3 s after entering; each cleared wave triggers a bigger one 5 s later. Zombies and imps from wave 1, skeletons from wave 3 |
+| Module monsters | Creatures the module places that are hostile to a Doom player are converted once when the player enters their area; later spawns (encounters, scripts) are caught by a sweep every 2 s within 30 m. Plot-flagged, DM-possessed, friendly and neutral creatures are skipped. Converted creatures deal Doom damage through `doom_hit`, banded by challenge rating (CR < 3: 3-12%, 1.2 s; CR < 8: 5-20%, 1.5 s; else 10-30%, 2 s), on their melee weapons and on their ammunition (bows never trigger on-hit, arrows do), and lose damage reduction, resistances, damage-type immunities and on-hit effects from their gear. Their AI, speed and other event scripts stay. On death their own OnDeath script runs first, then the Doom drop. See `DoomConvertCreature` in `doom_inc.nss` |
 | Monster defences | Monsters lose damage reduction, resistances and damage-type immunities from their stock gear (imps soaked 5 per hit, skeletons halved piercing), so every gun does its Doom damage |
 | Monster damage | A percentage of the player's max HP, using Doom's damage numbers as percents, so a level 1 and a level 5 character face the same fight. NWN still rolls monster attacks, but a damage shield on the player (DR 50/+20) soaks the weapon damage; each hit then runs `doom_hit` (via the stock On Hit: Unique Power tag-based item script) for the real damage, at most once per monster cooldown. Zombie 3-12% (1.2 s), skeleton 4-10% (1.2 s), imp claw and fireball 3-24% (1.2 s), balor 10-30% (2 s). Tuned in `DoomSetupMelee` |
 | Monster speed | Zombies and imps +50%, skeletons -30% |
 | Balor | Rare (25% per wave from wave 3, one at a time), 40% slower, melee only, ~300 HP. The stock `nw_balorboss` loses all spell-like abilities (Implosion, Fire Storm, ...), its vorpal and other on-hit effects, and its damage reduction |
 | Imp fireballs | `doom_imp` strips the stock imp's Magic Missile (it always hits) and Invisibility. Imps run their own AI instead of NWN's: they keep 8-14 m away and stay within 30 degrees of where you are facing (on screen), sidestepping a little, backing off when rushed and clawing only when cornered. At most every 4-6 s (a clock-based cooldown) an imp that sees you at 3-30 m, and is on your screen (within 40 degrees of your facing; it moves there first, and only throws from off screen after 4 s of failing to), winds up and throws a fireball at where you stand: 6 m/s, straight line, stopped by walls. Strafe to dodge. Speed, range and timing are constants at the top of `doom_imp.nss` |
-| Death | No death panel; respawn at the start with a pistol after 3 s |
+| Death | No death panel; respawn at the module start with a pistol after 3 s. With Doom mode off, the module's own death script runs instead |
 
 ### Weapon keys
 
@@ -55,13 +56,14 @@ is slower than in Doom.
 
 | Command | Effect |
 |---|---|
+| `/doom` | Switch Doom mode off and on for you (`/doom off`, `/doom on` also work). Off: normal camera, minimap and compass, no HUD, speed bonus or damage shield, and the other commands and the module's own chat script work as without NWN-Doom. On by default |
 | `/1` `/2` `/3` | Select fist / pistol / shotgun (same as F1-F3) |
 | `/idkfa` | Cheat for testing: all weapons, full ammo, 200% armor |
 | `/balor` | Testing: spawn a balor 12 m ahead |
 | `/gun` | Re-arm after right-click / Escape put the gun away |
 | `/fps` | Toggle first-person / normal camera |
 | `/lockcam` | Toggle locking the camera to where your character faces (on by default) |
-| `/wave` | Spawn the next wave now |
+| `/wave` | Spawn the next wave now (works without `DOOM_WAVES`, for testing) |
 | `/speed N` | Move N% faster than normal NWN speed (0-50, default 50, the engine's cap); `/speed` alone shows it |
 | `/cursor` | Toggle the hidden / visible gun-mode cursor |
 | `/debug` | Toggle logging every gun click to chat (for troubleshooting) |
@@ -108,9 +110,11 @@ is slower than in Doom.
 8. Optional: paste [docs/module_description.txt](docs/module_description.txt)
    into **Edit > Module Properties > Description**. It explains the controls
    on the game's module selection screen.
-9. Optional: place waypoints tagged `DOOM_SPAWN` where monsters should
+9. **Edit > Module Properties > Advanced > Variables**: add an `int`
+   variable `DOOM_WAVES` with value `1`. Without it no waves spawn.
+10. Optional: place waypoints tagged `DOOM_SPAWN` where monsters should
    appear. Without them, monsters spawn in a ring 10-15 m around the player.
-10. Test: **File > Test Module** in the toolset, or start the game, choose
+11. Test: **File > Test Module** in the toolset, or start the game, choose
    **New > Module**, pick the module and a character.
 
 The saved module and the hak live in your NWN user directory (`modules`,
@@ -121,13 +125,93 @@ from the `NWN_USER` environment variable when it is set.
 
 Any character of level 1-5 works: monster damage scales with your max HP.
 
+## Using NWN-Doom in another module
+
+The scripts also work when imported into an existing module, e.g. a story
+module, rather than a dedicated arena. A step-by-step walkthrough, including
+the official campaign chapters, is in
+[docs/adding_to_a_module.md](docs/adding_to_a_module.md). In short:
+
+1. Build the hak and the scripts and import `build/nwn_doom.erf` as in
+   steps 1, 2, 4 and 5 above. The module must not already have scripts
+   named `doom_*`.
+2. Hook up `doom_modload`:
+   - If the module's OnModuleLoad is empty or a stock script
+     (`x2_mod_def_load`), set it to `doom_modload`, which runs
+     `x2_mod_def_load` itself.
+   - If the module has its own OnModuleLoad script, keep it and add
+     `ExecuteScript("doom_modload", OBJECT_SELF);` at its end.
+   `doom_modload` takes over OnClientEnter, OnPlayerTarget, OnPlayerDeath,
+   OnPlayerChat and OnActivateItem, and keeps whatever scripts the module
+   had there in module variables (`DOOM_ORIG_<event number>`). The Doom
+   scripts still run them:
+   - OnClientEnter: the module's script first, then the Doom setup.
+   - OnPlayerChat: chat that is not a Doom command (or all chat but
+     `/doom` with Doom mode off) goes on to the module's script.
+   - OnActivateItem: every item but the three weapon items goes to the
+     module's script (`x2_mod_def_act` if it had none).
+   - OnPlayerTarget: the module's script gets the clicks when Doom mode is
+     off or the gun is holstered, e.g. for its own targeting items.
+   - OnPlayerDeath: the module's script (`nw_o0_death` if it had none) runs
+     only for players with Doom mode off; Doom mode respawns you.
+   Change these events in the module's load script after `doom_modload`
+   runs only if you mean to replace NWN-Doom's.
+3. Waves are off unless asked for: set an `int` variable `DOOM_WAVES` = 1
+   on the module (Module Properties > Advanced > Variables) for waves
+   everywhere, or on single areas (Area Properties > Advanced > Variables)
+   for arena areas. Waves follow the player: they start 3 s after a Doom
+   player is in such an area and continue while wave monsters are cleared
+   there. `/wave` spawns one anywhere, for testing.
+4. The module's own hostile creatures become Doom monsters automatically
+   (see "Module monsters" above); friendly and neutral NPCs are never
+   changed, and shots pass through them. Clicking a friendly NPC, a chest
+   or an item up close talks to it, opens it or picks it up. Conversion
+   can be tuned with `int` variables on an area, or on the module for
+   all areas without their own value:
+
+   | Variable | Default | Effect |
+   |---|---|---|
+   | `DOOM_STRIP_SPELLS` = 1 | off | Casters lose their prepared and spontaneous spells and spell-like abilities |
+   | `DOOM_KEEP_RANGED` = 1 | off | Ranged attacks are left alone: ammunition is not hooked to `doom_hit` |
+   | `DOOM_HP_CAP` = N | 0 (off) | Converted creatures start with at most N hit points (their maximum stays, so healing can raise it again) |
+
+   By default casters keep their spells: spell damage is not scaled to
+   Doom balance and the damage shield does not stop it, so a caster can
+   one-shot a low-level character.
+5. Players can type `/doom` to play the module normally and `/doom` again
+   to get Doom back. Ammo and weapons are kept meanwhile. This only
+   switches the player side; converted creatures stay converted, and
+   their `doom_hit` damage skips players with Doom mode off (they take the
+   weapon's normal damage instead).
+
+Things to know in a story module:
+
+- Doom mode respawns dead players at the module's start location, not
+  where they died.
+- Wave state (wave number, monsters alive) is module-wide; leaving an
+  arena area with wave monsters still alive pauses the waves until they
+  are dead.
+- Archers without ammunition items (no arrows, bolts or bullets in their
+  slots or inventory, e.g. blueprints relying on the engine's unlimited
+  ammo) keep their normal ranged damage, which the damage shield soaks:
+  they are harmless to Doom players at range. Thrown weapons sit in the
+  hand slot and are hooked like melee weapons.
+- Converting a weapon or ammunition retags it `doom_hit`; a module item
+  with its own tag-based on-hit script loses that script on converted
+  creatures.
+- The gun cursor is a targeting mode: while it is up, clicks do not walk
+  or open the radial menu. Holster with right-click / Escape, `/gun` to
+  re-arm, or `/doom` for normal NWN controls. NWScript cannot end
+  targeting mode itself, so after `/doom` off the cursor stays until the
+  next click.
+
 ## Shipping the module
 
 `py tools/package.py --module NAME --version X.Y` builds
 `build/dist/NAME-X.Y.zip` from `NAME.mod` in your NWN modules folder and
 the installed `nwn_doom.hak`. It refuses to build if the module does not
-use the hak, OnModuleLoad is not `doom_modload`, or a `doom_*` script is
-not compiled into the module, and warns if the description is empty.
+use the hak, OnModuleLoad is not `doom_modload`, the module has no
+`DOOM_WAVES` = 1 variable, or a `doom_*` script is not compiled into the module, and warns if the description is empty.
 
 The zip mirrors the NWN user folder (`modules/`, `hak/`), so players
 unzip it into `Documents\Neverwinter Nights`. It also contains a
@@ -148,6 +232,7 @@ module: the zip contains the module exactly as last saved by the toolset.
 - `tools/package.py`: checks the module and builds the player release zip.
 - `tools/doom_quickbar.py`: puts the `/1` `/2` `/3` weapon macros on a character's F1-F3.
 - `docs/module_description.txt`: module description / player controls.
+- `docs/adding_to_a_module.md`: tutorial for adding NWN-Doom to an existing module.
 - `licenses/`: Freedoom's licence (`FREEDOOM-COPYING.txt`) and contributor list
   (`FREEDOOM-CREDITS.txt`), both shipped with the art.
 - `tools/build_erf.py`: ERF/HAK writer; `--list <file>` shows an archive's contents.

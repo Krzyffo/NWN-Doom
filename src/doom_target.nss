@@ -2,10 +2,14 @@
 // Clicking anywhere fires the current weapon straight ahead along the
 // player's facing, which the locked first-person camera keeps at the centre
 // of the screen (the crosshair). Shots are hitscan rays: the first monster
-// on the line is hit, no attack roll. Clicking a door up close uses it.
-// Then the player goes back into gun mode.
+// on the line is hit, no attack roll. Clicking a door, chest, item or
+// friendly NPC up close uses it instead. Then the player goes back into gun
+// mode. Clicks from other targeting modes, or with Doom mode off, go to the
+// module's own OnPlayerTarget script.
 
 #include "doom_inc"
+
+const float DOOM_USE_RANGE = 3.0;  // m: doors, chests, items and NPCs closer than this are used
 
 void DoomHit(object oPC, object oVictim, int nDamage)
 {
@@ -24,7 +28,8 @@ void DoomHit(object oPC, object oVictim, int nDamage)
 // NWScript has no raycast, so a ray is tested against every creature in
 // range: a creature is hit if it is in front of the player, within its
 // body radius (+ aim assist) of the line, and in line of sight. The nearest
-// one along the line wins. Players are never hit.
+// one along the line wins. Players, and creatures that are not hostile to
+// the shooter (friendly or neutral NPCs, henchmen, summons), are never hit.
 
 float DoomCreatureRadius(object oCreature)
 {
@@ -55,7 +60,7 @@ object DoomTraceRay(object oPC, float fAngle, float fRange, float fAssist)
     object o = GetFirstObjectInShape(SHAPE_SPHERE, fSearch, lHere, FALSE, OBJECT_TYPE_CREATURE);
     while (GetIsObjectValid(o))
     {
-        if (o != oPC && !GetIsPC(o) && !GetIsDead(o))
+        if (o != oPC && !GetIsPC(o) && !GetIsDead(o) && GetIsReactionTypeHostile(o, oPC))
         {
             vector vTo = GetPosition(o) - vFrom;
             float fAlong = vTo.x * vDir.x + vTo.y * vDir.y;
@@ -139,7 +144,7 @@ void DoomFireShotgun(object oPC)
 // Doors are "used" by clicking them up close, like Doom's use key.
 void DoomUseDoor(object oPC, object oDoor)
 {
-    if (GetDistanceBetween(oPC, oDoor) > 3.0)
+    if (GetDistanceBetween(oPC, oDoor) > DOOM_USE_RANGE)
     {
         DoomMessage(oPC, "Too far away.");
         return;
@@ -161,10 +166,49 @@ void DoomUseDoor(object oPC, object oDoor)
         AssignCommand(oDoor, ActionOpenDoor(oDoor));
 }
 
+// Clicking something usable up close, like Doom's use key: friendly NPCs
+// are talked to, usable placeables (chests, levers) used, items picked up.
+// Returns FALSE if oTarget is none of these, so the click fires.
+int DoomUseObject(object oPC, object oTarget)
+{
+    if (GetDistanceBetween(oPC, oTarget) > DOOM_USE_RANGE) return FALSE;
+    int nType = GetObjectType(oTarget);
+    if (nType == OBJECT_TYPE_CREATURE)
+    {
+        if (GetIsPC(oTarget) || GetIsDead(oTarget) || GetIsReactionTypeHostile(oTarget, oPC))
+            return FALSE;
+        AssignCommand(oPC, ClearAllActions());
+        AssignCommand(oPC, ActionStartConversation(oTarget));
+        return TRUE;
+    }
+    if (nType == OBJECT_TYPE_PLACEABLE)
+    {
+        if (!GetUseableFlag(oTarget)) return FALSE;
+        AssignCommand(oPC, ClearAllActions());
+        AssignCommand(oPC, ActionInteractObject(oTarget));
+        return TRUE;
+    }
+    if (nType == OBJECT_TYPE_ITEM)
+    {
+        AssignCommand(oPC, ClearAllActions());
+        AssignCommand(oPC, ActionPickUpItem(oTarget));
+        return TRUE;
+    }
+    return FALSE;
+}
+
 void main()
 {
     object oPC = GetLastPlayerToSelectTarget();
     object oTarget = GetTargetingModeSelectedObject();
+
+    // Not our gun cursor: Doom mode is off, the player holstered, or the
+    // module started its own targeting mode.
+    if (!DoomIsOn(oPC) || !GetLocalInt(oPC, DOOM_VAR_ARMED))
+    {
+        DoomRunOriginal(EVENT_SCRIPT_MODULE_ON_PLAYER_TARGET);
+        return;
+    }
 
     if (GetLocalInt(oPC, DOOM_VAR_DEBUG))
     {
@@ -185,10 +229,16 @@ void main()
     if (GetIsDead(oPC)) return;
 
     // A door right in front of you is used rather than shot.
-    if (GetObjectType(oTarget) == OBJECT_TYPE_DOOR && GetDistanceBetween(oPC, oTarget) <= 3.0)
+    if (GetObjectType(oTarget) == OBJECT_TYPE_DOOR && GetDistanceBetween(oPC, oTarget) <= DOOM_USE_RANGE)
     {
         DoomUseDoor(oPC, oTarget);
         DoomArm(oPC);
+        return;
+    }
+    if (DoomUseObject(oPC, oTarget))
+    {
+        // Back to gun mode once the conversation or container has opened.
+        DelayCommand(0.5, DoomArm(oPC));
         return;
     }
 

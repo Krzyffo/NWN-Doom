@@ -48,7 +48,8 @@ const float  DOOM_PICKUP_RADIUS   = 1.75;
 // ---- Loop / waves --------------------------------------------------------
 const float  DOOM_TICK      = 0.25;
 const string DOOM_SPAWN_TAG = "DOOM_SPAWN";  // optional waypoints in the area
-const string DOOM_ALIVE_VAR = "DOOM_ALIVE";  // on module: living monsters
+const string DOOM_WAVES_VAR = "DOOM_WAVES";  // int 1 on the module or an area: waves run there
+const string DOOM_ALIVE_VAR = "DOOM_ALIVE";  // on module: living wave monsters
 const string DOOM_WAVE_VAR  = "DOOM_WAVE";   // on module: current wave number
 const string DOOM_NEXT_VAR  = "DOOM_NEXT";   // on module: next wave is scheduled
 
@@ -68,6 +69,7 @@ const string DOOM_VAR_ANIM     = "DOOM_ANIM";
 const string DOOM_RANGED_VAR   = "DOOM_RANGED";   // on monsters with their own AI (imps)
 const string DOOM_VAR_SHOW_CURSOR = "DOOM_SHOW_CURSOR";  // /cursor: visible gun-mode cursor
 const string DOOM_VAR_DEBUG       = "DOOM_DEBUG";        // /debug: log clicks to chat
+const string DOOM_VAR_OFF      = "DOOM_OFF";      // /doom: Doom mode switched off
 const string DOOM_HUD_ID       = "doom_hud";
 
 // ---- Quickbar weapon items -----------------------------------------------
@@ -78,7 +80,50 @@ const string DOOM_WITEM_VAR    = "DOOM_WEAPON_SLOT";
 const string DOOM_WITEM_TAG    = "DOOM_W_";
 const string DOOM_FX_TAG       = "DOOM_FX";
 
+// ---- Drop-in support ------------------------------------------------------
+// doom_modload keeps the module's own event scripts in module locals, and
+// the doom_* event scripts run them too, so NWN-Doom can be added to an
+// existing module.
+
+string DoomOrigEventVar(int nEvent)
+{
+    return "DOOM_ORIG_" + IntToString(nEvent);
+}
+
+// Runs the module's own script for module event nEvent (sFallback if the
+// module had none), in the current event's context.
+void DoomRunOriginal(int nEvent, string sFallback = "")
+{
+    string sScript = GetLocalString(GetModule(), DoomOrigEventVar(nEvent));
+    if (sScript == "") sScript = sFallback;
+    if (sScript != "") ExecuteScript(sScript, GetModule());
+}
+
+// Doom mode is on by default; /doom switches it per player.
+int DoomIsOn(object oPC)
+{
+    return !GetLocalInt(oPC, DOOM_VAR_OFF);
+}
+
+// Waves only run where the builder asked for them (DOOM_WAVES = 1).
+int DoomWavesEnabled(object oArea)
+{
+    if (!GetIsObjectValid(oArea)) return FALSE;
+    return GetLocalInt(GetModule(), DOOM_WAVES_VAR) == 1 || GetLocalInt(oArea, DOOM_WAVES_VAR) == 1;
+}
+
 // ---- Helpers -------------------------------------------------------------
+
+void DoomRemoveTaggedEffects(object oTarget, string sTag)
+{
+    effect e = GetFirstEffect(oTarget);
+    while (GetIsEffectValid(e))
+    {
+        if (GetEffectTag(e) == sTag)
+            RemoveEffect(oTarget, e);
+        e = GetNextEffect(oTarget);
+    }
+}
 
 int DoomRandomRange(int nMin, int nMax)
 {
@@ -151,13 +196,16 @@ void DoomPickupMessage(object oPC, string sMsg)
 // fires the module OnPlayerTarget event (doom_target).
 void DoomArm(object oPC)
 {
+    if (!DoomIsOn(oPC)) return;
     SetLocalInt(oPC, DOOM_VAR_ARMED, TRUE);
     // Default: the DM "kill" cursor, whose image the hak replaces with a
     // transparent one, so the pointer is hidden and only the HUD crosshair
     // shows. /cursor switches to the visible stock attack cursor instead.
     int nCursor = MOUSECURSOR_KILL;
     if (GetLocalInt(oPC, DOOM_VAR_SHOW_CURSOR)) nCursor = MOUSECURSOR_ATTACK;
-    EnterTargetingMode(oPC, OBJECT_TYPE_CREATURE | OBJECT_TYPE_DOOR | OBJECT_TYPE_TILE,
+    // Placeables and items too, so chests and loot can be used up close.
+    EnterTargetingMode(oPC, OBJECT_TYPE_CREATURE | OBJECT_TYPE_DOOR | OBJECT_TYPE_TILE
+                            | OBJECT_TYPE_PLACEABLE | OBJECT_TYPE_ITEM,
                        nCursor, nCursor);
     if (GetLocalInt(oPC, DOOM_VAR_DEBUG))
         SendMessageToPC(oPC, "[debug] gun mode on, cursor " + IntToString(nCursor));
@@ -167,13 +215,7 @@ void DoomArm(object oPC)
 
 void DoomClearFx(object oPC)
 {
-    effect e = GetFirstEffect(oPC);
-    while (GetIsEffectValid(e))
-    {
-        if (GetEffectTag(e) == DOOM_FX_TAG)
-            RemoveEffect(oPC, e);
-        e = GetNextEffect(oPC);
-    }
+    DoomRemoveTaggedEffects(oPC, DOOM_FX_TAG);
 }
 
 // Camera pitch in first person, in NWN's degrees (90 = level). Slightly
@@ -527,6 +569,7 @@ void DoomCrosshairOpen(object oPC)
 
 void DoomHudOpen(object oPC)
 {
+    if (!DoomIsOn(oPC)) return;
     int nOld = NuiFindWindow(oPC, DOOM_HUD_ID);
     if (nOld) NuiDestroy(oPC, nOld);
     DoomCrosshairOpen(oPC);
@@ -677,13 +720,7 @@ int DoomPlayerSpeed(object oPC)
 
 void DoomApplySpeed(object oPC)
 {
-    effect e = GetFirstEffect(oPC);
-    while (GetIsEffectValid(e))
-    {
-        if (GetEffectTag(e) == DOOM_SPEED_TAG)
-            RemoveEffect(oPC, e);
-        e = GetNextEffect(oPC);
-    }
+    DoomRemoveTaggedEffects(oPC, DOOM_SPEED_TAG);
     int nSpeed = DoomPlayerSpeed(oPC);
     if (nSpeed <= 0) return;
     effect eSpeed = SupernaturalEffect(EffectMovementSpeedIncrease(nSpeed));
@@ -790,6 +827,15 @@ void DoomSetMeleeStats(object oMon, int nMinPct, int nMaxPct, int nCooldownMs)
     SetLocalInt(oMon, DOOM_HIT_CD_VAR, nCooldownMs);
 }
 
+// Makes hits with oItem run doom_hit (does nothing for an invalid item).
+void DoomHookWeapon(object oItem)
+{
+    if (!GetIsObjectValid(oItem) || GetTag(oItem) == DOOM_HIT_TAG) return;
+    AddItemProperty(DURATION_TYPE_PERMANENT,
+        ItemPropertyOnHitCastSpell(IP_CONST_ONHIT_CASTSPELL_ONHIT_UNIQUEPOWER, 1), oItem);
+    SetTag(oItem, DOOM_HIT_TAG);
+}
+
 void DoomSetupMelee(object oMon, string sResRef)
 {
     // Doom numbers as %: zombieman 3-15, imp scratch 3-24, baron 10-80
@@ -818,11 +864,7 @@ void DoomSetupMelee(object oMon, string sResRef)
         if (nSlot != INVENTORY_SLOT_RIGHTHAND && nSlot != INVENTORY_SLOT_LEFTHAND
             && nSlot < INVENTORY_SLOT_CWEAPON_L)
             continue;
-        object oWeapon = GetItemInSlot(nSlot, oMon);
-        if (!GetIsObjectValid(oWeapon)) continue;
-        AddItemProperty(DURATION_TYPE_PERMANENT,
-            ItemPropertyOnHitCastSpell(IP_CONST_ONHIT_CASTSPELL_ONHIT_UNIQUEPOWER, 1), oWeapon);
-        SetTag(oWeapon, DOOM_HIT_TAG);
+        DoomHookWeapon(GetItemInSlot(nSlot, oMon));
     }
 }
 
@@ -830,13 +872,7 @@ void DoomSetupMelee(object oMon, string sResRef)
 // below +20). Scripted damage is magical or fire, so it is not affected.
 void DoomApplyShield(object oPC)
 {
-    effect e = GetFirstEffect(oPC);
-    while (GetIsEffectValid(e))
-    {
-        if (GetEffectTag(e) == DOOM_SHIELD_TAG)
-            RemoveEffect(oPC, e);
-        e = GetNextEffect(oPC);
-    }
+    DoomRemoveTaggedEffects(oPC, DOOM_SHIELD_TAG);
     effect eShield = SupernaturalEffect(EffectDamageReduction(50, DAMAGE_POWER_PLUS_TWENTY));
     ApplyEffectToObject(DURATION_TYPE_PERMANENT, TagEffect(eShield, DOOM_SHIELD_TAG), oPC);
 }
@@ -853,6 +889,34 @@ void DoomSetupBalor(object oMon)
         SupernaturalEffect(EffectTemporaryHitpoints(DOOM_BALOR_EXTRA_HP)), oMon);
 }
 
+const string DOOM_SETUP_VAR      = "DOOM_SETUP";       // on monsters: Doom setup done
+const string DOOM_WAVE_MON_VAR   = "DOOM_WAVE_MON";    // on monsters: counts for the wave
+const string DOOM_ORIG_DEATH_VAR = "DOOM_ORIG_DEATH";  // on monsters: their own OnDeath
+
+// doom_mdeath runs the creature's own death script first, so quest
+// scripts on module creatures keep working, then the Doom drop.
+void DoomHookDeath(object oMon)
+{
+    SetLocalInt(oMon, DOOM_SETUP_VAR, TRUE);
+    string sDeath = GetEventScript(oMon, EVENT_SCRIPT_CREATURE_ON_DEATH);
+    if (sDeath != "doom_mdeath")
+        SetLocalString(oMon, DOOM_ORIG_DEATH_VAR, sDeath);
+    SetEventScript(oMon, EVENT_SCRIPT_CREATURE_ON_DEATH, "doom_mdeath");
+}
+
+// The Doom treatment for a spawned wave monster, by blueprint.
+void DoomPrepareMonster(object oMon, string sResRef)
+{
+    DoomHookDeath(oMon);
+    DoomSetupMelee(oMon, sResRef);
+
+    // Imps get Doom's dodgeable fireball instead of NWN's spells.
+    if (sResRef == DOOM_RESREF_IMP)
+        ExecuteScript("doom_imp", oMon);
+    if (sResRef == DOOM_RESREF_BALOR)
+        DoomSetupBalor(oMon);
+}
+
 object DoomSpawnMonster(string sResRef, location lLoc, object oPC, string sTag = "")
 {
     object oMon = CreateObject(OBJECT_TYPE_CREATURE, sResRef, lLoc, FALSE, sTag);
@@ -861,14 +925,8 @@ object DoomSpawnMonster(string sResRef, location lLoc, object oPC, string sTag =
         WriteTimestampedLogEntry("NWN-Doom: failed to spawn " + sResRef);
         return OBJECT_INVALID;
     }
-    SetEventScript(oMon, EVENT_SCRIPT_CREATURE_ON_DEATH, "doom_mdeath");
-    DoomSetupMelee(oMon, sResRef);
-
-    // Imps get Doom's dodgeable fireball instead of NWN's spells.
-    if (sResRef == DOOM_RESREF_IMP)
-        ExecuteScript("doom_imp", oMon);
-    if (sResRef == DOOM_RESREF_BALOR)
-        DoomSetupBalor(oMon);
+    DoomPrepareMonster(oMon, sResRef);
+    SetLocalInt(oMon, DOOM_WAVE_MON_VAR, TRUE);
 
     int nSpeed = DoomMonsterSpeed(sResRef);
     effect eSpeed = EffectMovementSpeedIncrease(nSpeed);
@@ -882,6 +940,141 @@ object DoomSpawnMonster(string sResRef, location lLoc, object oPC, string sTag =
     object oMod = GetModule();
     SetLocalInt(oMod, DOOM_ALIVE_VAR, GetLocalInt(oMod, DOOM_ALIVE_VAR) + 1);
     return oMon;
+}
+
+// ---- Module creatures ----
+// Hostile creatures the module places (or spawns: encounters, scripts) are
+// converted once, when a Doom player enters their area or comes within
+// DOOM_SWEEP_RANGE. Their AI, speed and other event scripts stay.
+// Switches, int locals on the area or else the module:
+//   DOOM_STRIP_SPELLS = 1  casters lose their spells and spell-like
+//                          abilities (default: they keep them, and spell
+//                          damage is not scaled to Doom balance)
+//   DOOM_KEEP_RANGED = 1   leave ranged attacks alone (default: equipped
+//                          and carried ammunition runs doom_hit like melee)
+//   DOOM_HP_CAP = N        creatures start with at most N hit points
+//                          (default 0: off)
+
+const string DOOM_STRIP_SPELLS_VAR = "DOOM_STRIP_SPELLS";
+const string DOOM_KEEP_RANGED_VAR  = "DOOM_KEEP_RANGED";
+const string DOOM_HP_CAP_VAR       = "DOOM_HP_CAP";
+const float  DOOM_SWEEP_RANGE      = 30.0;
+
+int DoomAreaSetting(object oArea, string sVar)
+{
+    int n = GetLocalInt(oArea, sVar);
+    if (n == 0) n = GetLocalInt(GetModule(), sVar);
+    return n;
+}
+
+// Damage band in % of the player's max HP, by challenge rating: weak like
+// Doom's zombieman, mid, and strong like the balor.
+void DoomSetMeleeByCR(object oMon)
+{
+    float fCR = GetChallengeRating(oMon);
+    if (fCR < 3.0)      DoomSetMeleeStats(oMon, 3, 12, 1200);
+    else if (fCR < 8.0) DoomSetMeleeStats(oMon, 5, 20, 1500);
+    else                DoomSetMeleeStats(oMon, 10, 30, 2000);
+}
+
+// Bows and crossbows never trigger on-hit properties; their ammunition
+// does. Hooks the equipped stacks and any spare ammunition carried.
+void DoomHookAmmo(object oMon)
+{
+    DoomHookWeapon(GetItemInSlot(INVENTORY_SLOT_ARROWS, oMon));
+    DoomHookWeapon(GetItemInSlot(INVENTORY_SLOT_BOLTS, oMon));
+    DoomHookWeapon(GetItemInSlot(INVENTORY_SLOT_BULLETS, oMon));
+    object oItem = GetFirstItemInInventory(oMon);
+    while (GetIsObjectValid(oItem))
+    {
+        int nBase = GetBaseItemType(oItem);
+        if (nBase == BASE_ITEM_ARROW || nBase == BASE_ITEM_BOLT || nBase == BASE_ITEM_BULLET)
+            DoomHookWeapon(oItem);
+        oItem = GetNextItemInInventory(oMon);
+    }
+}
+
+// Removes every prepared and spontaneous spell oMon has.
+void DoomStripSpells(object oMon)
+{
+    DoomStripSpellAbilities(oMon);
+    int nPos;
+    for (nPos = 1; nPos <= 8; nPos++)
+    {
+        int nClass = GetClassByPosition(nPos, oMon);
+        if (nClass == CLASS_TYPE_INVALID) continue;
+        int nLevel;
+        for (nLevel = 0; nLevel <= 9; nLevel++)
+        {
+            int i;
+            int nCount = GetMemorizedSpellCountByLevel(oMon, nClass, nLevel);
+            for (i = 0; i < nCount; i++)
+                ClearMemorizedSpell(oMon, nClass, nLevel, i);
+            nCount = GetKnownSpellCount(oMon, nClass, nLevel);
+            for (i = 0; i < nCount; i++)
+            {
+                int nSpell = GetKnownSpellId(oMon, nClass, nLevel, i);
+                int n;
+                for (n = 0; n < 20 && GetHasSpell(nSpell, oMon); n++)
+                    DecrementRemainingSpellUses(oMon, nSpell);
+            }
+        }
+    }
+}
+
+// Should o be converted for oPC? Hostile to oPC, alive, not a player, not
+// plot, not DM-possessed, and not converted or spawned by us already.
+int DoomIsConvertible(object o, object oPC)
+{
+    return !GetLocalInt(o, DOOM_SETUP_VAR) && !GetIsPC(o) && !GetIsDMPossessed(o)
+        && !GetPlotFlag(o) && !GetIsDead(o) && GetIsReactionTypeHostile(oPC, o);
+}
+
+void DoomConvertCreature(object oMon)
+{
+    object oArea = GetArea(oMon);
+    DoomHookDeath(oMon);
+    // Melee must go through doom_hit: the player's damage shield soaks the
+    // weapon damage. This also strips damage reduction and resistances.
+    DoomSetupMelee(oMon, "");
+    DoomSetMeleeByCR(oMon);
+    if (DoomAreaSetting(oArea, DOOM_KEEP_RANGED_VAR) != 1)
+        DoomHookAmmo(oMon);
+    if (DoomAreaSetting(oArea, DOOM_STRIP_SPELLS_VAR) == 1)
+        DoomStripSpells(oMon);
+    int nCap = DoomAreaSetting(oArea, DOOM_HP_CAP_VAR);
+    if (nCap > 0 && GetCurrentHitPoints(oMon) > nCap)
+        SetCurrentHitPoints(oMon, nCap);
+}
+
+// Converts the hostile creatures around oPC: the whole area when the
+// player has just entered it (bWholeArea), else those within
+// DOOM_SWEEP_RANGE, which catches encounters and scripted spawns.
+// Friendly and neutral NPCs, henchmen and summons are left alone.
+void DoomSetupAreaHostiles(object oPC, int bWholeArea)
+{
+    object oArea = GetArea(oPC);
+    if (!GetIsObjectValid(oArea)) return;
+
+    // Collected first: converting could run scripts that walk the area or
+    // a shape too, which would reset this loop's iterator.
+    json jFound = JsonArray();
+    location lHere = GetLocation(oPC);
+    object o;
+    if (bWholeArea) o = GetFirstObjectInArea(oArea, OBJECT_TYPE_CREATURE);
+    else            o = GetFirstObjectInShape(SHAPE_SPHERE, DOOM_SWEEP_RANGE, lHere, FALSE, OBJECT_TYPE_CREATURE);
+    while (GetIsObjectValid(o))
+    {
+        if (DoomIsConvertible(o, oPC))
+            jFound = JsonArrayInsert(jFound, JsonString(ObjectToString(o)));
+        if (bWholeArea) o = GetNextObjectInArea(oArea, OBJECT_TYPE_CREATURE);
+        else            o = GetNextObjectInShape(SHAPE_SPHERE, DOOM_SWEEP_RANGE, lHere, FALSE, OBJECT_TYPE_CREATURE);
+    }
+
+    int i;
+    int nCount = JsonGetLength(jFound);
+    for (i = 0; i < nCount; i++)
+        DoomConvertCreature(StringToObject(JsonGetString(JsonArrayGet(jFound, i))));
 }
 
 // Spawn point number i of a wave: the DOOM_SPAWN waypoints in turn if the
@@ -1000,4 +1193,53 @@ int DoomApplyPickup(object oPC, string sKind)
         return TRUE;
     }
     return FALSE;
+}
+
+// ---- Doom mode on / off (/doom) --------------------------------------------
+
+void DoomHudClose(object oPC)
+{
+    int nToken = NuiFindWindow(oPC, DOOM_HUD_ID);
+    if (nToken) NuiDestroy(oPC, nToken);
+    nToken = NuiFindWindow(oPC, DOOM_XHAIR_ID);
+    if (nToken) NuiDestroy(oPC, nToken);
+    DeleteLocalInt(oPC, DOOM_VAR_HUD);
+}
+
+// Hides panels that would sit on top of the Doom view, or shows them again.
+void DoomHidePanels(object oPC, int bHide)
+{
+    SetGuiPanelDisabled(oPC, GUI_PANEL_MINIMAP, bHide);
+    SetGuiPanelDisabled(oPC, GUI_PANEL_COMPASS, bHide);
+}
+
+// Off: back to normal NWN (camera, cursor, panels, speed, damage); ammo and
+// weapons are kept for when it is switched on again. NWScript cannot leave
+// targeting mode, so the gun cursor lasts until the next click or Escape,
+// which doom_target then ignores.
+void DoomSetMode(object oPC, int bOn)
+{
+    if (bOn)
+    {
+        DeleteLocalInt(oPC, DOOM_VAR_OFF);
+        DoomApplyShield(oPC);
+        DoomApplySpeed(oPC);
+        DoomCameraFirstPerson(oPC);
+        DoomHidePanels(oPC, TRUE);
+        DoomHudOpen(oPC);
+        SetLocalInt(oPC, DOOM_VAR_LAST_HP, GetCurrentHitPoints(oPC));
+        DelayCommand(0.1, DoomArm(oPC));
+        SendMessageToPC(oPC, "Doom mode on. /doom switches it off.");
+    }
+    else
+    {
+        SetLocalInt(oPC, DOOM_VAR_OFF, TRUE);
+        SetLocalInt(oPC, DOOM_VAR_ARMED, FALSE);
+        DoomCameraThirdPerson(oPC);
+        DoomHudClose(oPC);
+        DoomHidePanels(oPC, FALSE);
+        DoomRemoveTaggedEffects(oPC, DOOM_SPEED_TAG);
+        DoomRemoveTaggedEffects(oPC, DOOM_SHIELD_TAG);
+        SendMessageToPC(oPC, "Doom mode off. /doom switches it back on.");
+    }
 }
