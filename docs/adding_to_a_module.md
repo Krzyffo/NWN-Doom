@@ -8,9 +8,15 @@ in the README section "Using NWN-Doom in another module".
 You need the toolset (`bin\win32\nwtoolset.exe` in the game folder), Python
 (`py`), and this repository.
 
-## 1. Build the art and the scripts
+## 1. Get the art and the scripts
 
-Once, if you have not done it yet:
+**From a release:** download `nwn-doom-kit-<version>.zip` from the
+[releases page](https://github.com/Krzyffo/NWN-Doom/releases) and unzip
+it into your NWN user folder (normally `Documents\Neverwinter Nights`).
+That puts `nwn_doom.hak` in `hak\` and the scripts in `erf\nwn_doom.erf`;
+import that file in step 4 instead of `build/nwn_doom.erf`. Skip to step 2.
+
+**From this repository:** once, if you have not done it yet:
 
 ```
 py tools/wad_to_hak.py path\to\freedoom2.wad

@@ -220,8 +220,14 @@ unzip it into `Documents\Neverwinter Nights`. It also contains a
 requires its copyright notice to ship with the art. Nothing is uploaded; publish the zip
 yourself (e.g. on the Neverwinter Vault).
 
+It also builds `build/dist/nwn-doom-kit-X.Y.zip` for builders adding
+NWN-Doom to their own module: the hak, the compiled scripts
+(`erf/nwn_doom.erf`), the tutorial and the Freedoom licence files.
+
 Package after importing the latest `build/nwn_doom.erf` and building the
 module: the zip contains the module exactly as last saved by the toolset.
+The check only sees that each script is compiled in, not that it is the
+latest build.
 
 ## Repository layout
 

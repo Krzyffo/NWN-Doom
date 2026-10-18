@@ -14,9 +14,18 @@ that the module is set up for release, and writes build/dist/<NAME>-<X.Y>.zip:
 The zip mirrors the NWN user folder, so players can unzip it straight into
 Documents\\Neverwinter Nights. Nothing is uploaded anywhere.
 
+It also writes build/dist/nwn-doom-kit-<X.Y>.zip, for adding NWN-Doom to
+another module (docs/adding_to_a_module.md):
+
+  hak/nwn_doom.hak
+  erf/nwn_doom.erf         the compiled scripts, from tools/build.py
+  ADDING_TO_A_MODULE.md    docs/adding_to_a_module.md
+  FREEDOOM-LICENSE.txt, FREEDOOM-CREDITS.txt
+
 Checks (any failure stops the build):
 - the module lists the nwn_doom hak
 - OnModuleLoad is doom_modload
+- the module has an int variable DOOM_WAVES = 1 (the arena needs its waves)
 - every src/doom_*.nss script with a main() is compiled into the module
 - the module has a description (warning only)
 """
@@ -36,6 +45,8 @@ GFF_TOOL = os.path.join(ROOT, "tools", "neverwinter", "nwn_gff.exe")
 DESCRIPTION = os.path.join(ROOT, "docs", "module_description.txt")
 LICENSE = os.path.join(ROOT, "licenses", "FREEDOOM-COPYING.txt")
 CREDITS = os.path.join(ROOT, "licenses", "FREEDOOM-CREDITS.txt")
+TUTORIAL = os.path.join(ROOT, "docs", "adding_to_a_module.md")
+SCRIPTS_ERF = build_erf.OUT
 DIST = os.path.join(ROOT, "build", "dist")
 HAK_NAME = "nwn_doom"
 RES_IFO = 2014
@@ -158,7 +169,7 @@ def main():
     if not os.path.exists(mod_path):
         available = sorted(f[:-4] for f in os.listdir(os.path.join(NWN_USER, "modules")) if f.endswith(".mod"))
         fail(f"{mod_path} not found. Modules there: {', '.join(available) or 'none'}. Use --module NAME.")
-    for path in (DESCRIPTION, LICENSE, CREDITS):
+    for path in (DESCRIPTION, LICENSE, CREDITS, TUTORIAL, SCRIPTS_ERF):
         if not os.path.exists(path):
             fail(f"{path} is missing")
 
@@ -186,6 +197,15 @@ def main():
     print(f"module:  {mod_path}" + (f" (\"{title}\")" if title else ""))
     print(f"hak:     {hak_path}")
     print(f"wrote {zip_path} ({os.path.getsize(zip_path) / 1e6:.1f} MB)")
+
+    kit_path = os.path.join(DIST, f"nwn-doom-kit-{args.version}.zip")
+    with zipfile.ZipFile(kit_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(hak_path, f"hak/{HAK_NAME}.hak")
+        z.write(SCRIPTS_ERF, f"erf/{HAK_NAME}.erf")
+        z.write(TUTORIAL, "ADDING_TO_A_MODULE.md")
+        z.write(LICENSE, "FREEDOOM-LICENSE.txt")
+        z.write(CREDITS, "FREEDOOM-CREDITS.txt")
+    print(f"wrote {kit_path} ({os.path.getsize(kit_path) / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":
