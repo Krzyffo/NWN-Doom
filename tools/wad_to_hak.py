@@ -2,8 +2,8 @@
 
   py tools/wad_to_hak.py [path\\to\\doom2.wad]
 
-- Decodes the status bar, number fonts, arms panel and first-person weapon
-  sprites (Doom picture format + PLAYPAL palette).
+- Decodes the status bar, number fonts, arms panel, Doomguy faces and
+  first-person weapon sprites (Doom picture format + PLAYPAL palette).
 - Writes them as 32-bit TGAs, scaled up 4x with nearest-neighbour so the
   pixels stay crisp, named dm_<lump> (e.g. dm_stbar.tga).
 - Converts the weapon and imp sounds (Doom DMX or WAV lumps) to mono
@@ -41,6 +41,9 @@ HUD_LUMPS = (["STBAR", "STARMS", "STTPRCNT", "STTMINUS"]
              + [f"STGNUM{i}" for i in range(2, 8)])
 # First-person weapon frames: name pattern -> found frames are all extracted.
 WEAPON_RE = re.compile(r"^(PUNG|PISG|PISF|SHTG|SHTF)[A-Z]0$")
+# Status bar faces: straight (health level 0-4, look 0-2), turned left/right,
+# ouch, evil grin, rampage (firing), dead, god.
+FACE_RE = re.compile(r"^STF(ST[0-4][0-2]|TL[0-4]0|TR[0-4]0|OUCH[0-4]|EVL[0-4]|KILL[0-4]|DEAD0|GOD0)$")
 
 # Sounds, played by the scripts as dm_<lump> (e.g. dm_dspistol).
 SOUND_LUMPS = ["DSPISTOL", "DSSHOTGN", "DSPUNCH", "DSFIRSHT", "DSFIRXPL"]
@@ -49,6 +52,9 @@ SOUND_LUMPS = ["DSPISTOL", "DSSHOTGN", "DSPUNCH", "DSFIRSHT", "DSFIRXPL"]
 # shown (view height 168, centre 84), at y = 16 - topoffset.
 SPRITE_X0 = 1
 SPRITE_Y0 = 16
+# Doom draws the status bar face at (143, 168), minus the image's offsets.
+FACE_X0 = 143
+FACE_Y0 = 168
 
 
 def read_wad(path):
@@ -161,6 +167,7 @@ def main():
 
     names = [n for n in HUD_LUMPS if n in lumps]
     names += sorted(n for n in lumps if WEAPON_RE.match(n))
+    names += sorted(n for n in lumps if FACE_RE.match(n))
     written, sprites, skipped = [], {}, []
     for name in names:
         w, h, left, top, pixels = decode_picture(lumps[name], palette)
@@ -173,6 +180,8 @@ def main():
         written.append(path)
         if WEAPON_RE.match(name):
             sprites[resref] = (SPRITE_X0 - left, SPRITE_Y0 - top, w, h)
+        elif FACE_RE.match(name):
+            sprites[resref] = (FACE_X0 - left, FACE_Y0 - top, w, h)
     missing = [n for n in HUD_LUMPS if n not in lumps]
     print(f"converted {len(written)} images; skipped placeholders: {skipped or 'none'}; missing: {missing or 'none'}")
 
@@ -191,6 +200,7 @@ def main():
         print(f"warning: no usable audio for {', '.join(bad_sounds)} (missing, or empty stubs as in "
               "some repacked WADs); the game stays silent for those. The official freedoom2.wad has them.")
 
+    written += write_cursor(ART_DIR)
     vfx_path, vfx_constants = build_vfx_2da(ART_DIR)
     written.append(vfx_path)
     write_art_include(sprites, vfx_constants)
@@ -202,6 +212,88 @@ def main():
         print(f"installed {os.path.join(hak_dir, 'nwn_doom.hak')}")
     else:
         print(f"hak folder not found ({hak_dir}); copy build/nwn_doom.hak there yourself")
+
+
+# Gun mode uses the stock DM "kill" cursor (MOUSECURSOR_KILL), which players
+# never see otherwise, and the hak replaces its image with a small red dot.
+# Shots go to the HUD crosshair, not the pointer, but the sky cannot be
+# clicked in targeting mode, so the dot shows where the pointer is (keep it
+# on the ground or on monsters). Stock cursors click at their top-left pixel,
+# so the dot sits there. (EE's custom cursor slots broke clicking in
+# targeting mode.) Every stock cursor exists as TGA and DDS; both are replaced.
+CURSOR_RESREFS = ["gui_mp_killu", "gui_mp_killd"]
+CURSOR_SIZE = 32
+CURSOR_DOT = (230, 40, 30, 255)      # Doom red
+CURSOR_OUTLINE = (0, 0, 0, 255)
+
+
+def cursor_pixels():
+    """32x32 RGBA rows: a 4x4 dot with a 1-pixel outline in the top-left corner."""
+    rows = [[(0, 0, 0, 0)] * CURSOR_SIZE for _ in range(CURSOR_SIZE)]
+    for y in range(6):
+        for x in range(6):
+            rows[y][x] = CURSOR_DOT if 1 <= x <= 4 and 1 <= y <= 4 else CURSOR_OUTLINE
+    return rows
+
+
+def _rgb565(c):
+    return ((c[0] >> 3) << 11) | ((c[1] >> 2) << 5) | (c[2] >> 3)
+
+
+def _dxt5_block(px):
+    """Encode 16 RGBA pixels as one DXT5 block (2 colours, 2 alpha levels:
+    enough for flat-coloured cursor art)."""
+    opaque = [p for p in px if p[3] >= 128]
+    if not opaque:
+        return bytes(16)  # all-zero block: alpha 0 everywhere
+    lum = lambda c: c[0] * 3 + c[1] * 6 + c[2]
+    c0, c1 = max(opaque, key=lum), min(opaque, key=lum)
+    pal = [c0, c1,
+           tuple((2 * a + b) // 3 for a, b in zip(c0, c1)),
+           tuple((a + 2 * b) // 3 for a, b in zip(c0, c1))]
+    color_bits = alpha_bits = 0
+    for i, p in enumerate(px):
+        ci = min(range(4), key=lambda k: sum((p[j] - pal[k][j]) ** 2 for j in range(3)))
+        color_bits |= ci << (2 * i)
+        alpha_bits |= (0 if p[3] >= 128 else 1) << (3 * i)  # a0 = 255, a1 = 0
+    alpha = bytes([255, 0]) + alpha_bits.to_bytes(6, "little")
+    color = struct.pack("<HHI", _rgb565(c0), _rgb565(c1), color_bits)
+    return alpha + color
+
+
+def write_nwn_dds(path, rows):
+    """Square RGBA image in NWN's own DDS layout: a 20-byte header (width,
+    height, 4 = DXT5, level-0 byte size, mean alpha) followed by DXT5 blocks
+    for every mip level down to 1x1, as in the stock cursor DDS files."""
+    size = len(rows)
+    mean_alpha = sum(p[3] for r in rows for p in r) / (255.0 * size * size)
+    levels, img = [], rows
+    while True:
+        n = len(img)
+        blocks = b""
+        for by in range(0, max(n, 4), 4):
+            for bx in range(0, max(n, 4), 4):
+                px = [img[min(by + y, n - 1)][min(bx + x, n - 1)] for y in range(4) for x in range(4)]
+                blocks += _dxt5_block(px)
+        levels.append(blocks)
+        if n == 1:
+            break
+        img = [[img[2 * y][2 * x] for x in range(n // 2)] for y in range(n // 2)]  # nearest
+    with open(path, "wb") as f:
+        f.write(struct.pack("<IIIIf", size, size, 4, len(levels[0]), mean_alpha) + b"".join(levels))
+
+
+def write_cursor(out_dir):
+    rows = cursor_pixels()
+    paths = []
+    for resref in CURSOR_RESREFS:
+        tga = os.path.join(out_dir, resref + ".tga")
+        write_tga(tga, CURSOR_SIZE, CURSOR_SIZE, rows, 1)
+        dds = os.path.join(out_dir, resref + ".dds")
+        write_nwn_dds(dds, rows)
+        paths += [tga, dds]
+    print(f"wrote dot cursor {', '.join(CURSOR_RESREFS)} (TGA + DDS)")
+    return paths
 
 
 # Custom visualeffects.2da rows, appended after the game's last row.
@@ -268,17 +360,17 @@ def build_vfx_2da(out_dir):
 
 
 def write_art_include(sprites, vfx_constants):
-    top = min(y for _, y, _, _ in sprites.values())
+    top = min(y for r, (_, y, _, _) in sprites.items() if not r.startswith(PREFIX + "stf"))
     lines = [
         "// doom_art: GENERATED by tools/wad_to_hak.py from the WAD - do not edit.",
-        "// Weapon sprite placement in Doom's 320x200 screen space.",
+        "// Weapon frame and status bar face placement in Doom's 320x200 screen space.",
         "",
         "#include \"nw_inc_nui\"",
         "",
         "// Topmost virtual y any weapon frame reaches; the HUD window starts here.",
         f"const float DOOM_ART_TOP = {float(top):.1f};",
         "",
-        "// Rect of weapon frame sResRef inside the HUD window at scale fScale.",
+        "// Rect of weapon frame or face sResRef inside the HUD window at scale fScale.",
         "json DoomSpriteRect(string sResRef, float fScale)",
         "{",
         "    float x = 0.0; float y = 0.0; float w = 0.0; float h = 0.0;",
@@ -295,7 +387,7 @@ def write_art_include(sprites, vfx_constants):
         "// Rows added to visualeffects.2da in the hak; applying one plays its sound.",
     ] + [f"const int {name} = {row};" for name, row in vfx_constants.items()] + [
         "",
-        "// TRUE if the WAD provided this frame.",
+        "// TRUE if the WAD provided this weapon frame or face.",
         "int DoomHasSprite(string sResRef)",
         "{",
         "    return " + " || ".join(f"sResRef == \"{r}\"" for r in sorted(sprites)) + ";",
@@ -304,7 +396,8 @@ def write_art_include(sprites, vfx_constants):
     ]
     with open(NSS_OUT, "w", newline="\n") as f:
         f.write("\n".join(lines))
-    print(f"wrote {NSS_OUT} ({len(sprites)} weapon frames, top y {top})")
+    faces = sum(1 for r in sprites if r.startswith(PREFIX + "stf"))
+    print(f"wrote {NSS_OUT} ({len(sprites) - faces} weapon frames, {faces} faces, top y {top})")
 
 
 if __name__ == "__main__":

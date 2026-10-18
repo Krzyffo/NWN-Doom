@@ -19,8 +19,14 @@ const int   DOOM_PISTOL_MAX          = 15;
 const int   DOOM_PISTOL_COOLDOWN_MS  = 400;
 const int   DOOM_SHOTGUN_PELLETS     = 7;    // Doom shotgun: 7 pellets of 5-15
 const int   DOOM_SHOTGUN_COOLDOWN_MS = 950;
-const float DOOM_SHOTGUN_SPLASH      = 2.5;  // stray pellets can hit enemies this close to the target
 const float DOOM_WEAPON_RANGE        = 40.0;
+
+// Aiming: shots go straight along the player's facing (screen centre).
+const float DOOM_AIM_ASSIST  = 0.4;   // m beyond a monster's body that still counts as a hit
+const float DOOM_FIST_ASSIST = 0.8;   // punches are more forgiving
+const float DOOM_SPREAD_DEG  = 5.6;   // Doom's bullet spread for pellets and pistol refire
+const int   DOOM_REFIRE_MS   = 600;   // pistol shots within this of the last one spread
+const float DOOM_EYE_HEIGHT  = 1.5;   // m, where rays start for wall checks
 
 // ---- Ammo ----------------------------------------------------------------
 const int DOOM_START_BULLETS = 50;
@@ -60,6 +66,8 @@ const string DOOM_VAR_HUD      = "DOOM_HUD";
 const string DOOM_VAR_LAST_HP  = "DOOM_LAST_HP";
 const string DOOM_VAR_ANIM     = "DOOM_ANIM";
 const string DOOM_RANGED_VAR   = "DOOM_RANGED";   // on monsters with their own AI (imps)
+const string DOOM_VAR_SHOW_CURSOR = "DOOM_SHOW_CURSOR";  // /cursor: visible gun-mode cursor
+const string DOOM_VAR_DEBUG       = "DOOM_DEBUG";        // /debug: log clicks to chat
 const string DOOM_HUD_ID       = "doom_hud";
 
 // ---- Quickbar weapon items -----------------------------------------------
@@ -144,8 +152,15 @@ void DoomPickupMessage(object oPC, string sMsg)
 void DoomArm(object oPC)
 {
     SetLocalInt(oPC, DOOM_VAR_ARMED, TRUE);
+    // Default: the DM "kill" cursor, whose image the hak replaces with a
+    // transparent one, so the pointer is hidden and only the HUD crosshair
+    // shows. /cursor switches to the visible stock attack cursor instead.
+    int nCursor = MOUSECURSOR_KILL;
+    if (GetLocalInt(oPC, DOOM_VAR_SHOW_CURSOR)) nCursor = MOUSECURSOR_ATTACK;
     EnterTargetingMode(oPC, OBJECT_TYPE_CREATURE | OBJECT_TYPE_DOOR | OBJECT_TYPE_TILE,
-                       MOUSECURSOR_ATTACK, MOUSECURSOR_ATTACK);
+                       nCursor, nCursor);
+    if (GetLocalInt(oPC, DOOM_VAR_DEBUG))
+        SendMessageToPC(oPC, "[debug] gun mode on, cursor " + IntToString(nCursor));
 }
 
 // ---- First-person camera -------------------------------------------------
@@ -176,6 +191,8 @@ void DoomCameraFirstPerson(object oPC)
     {
         // Camera rigidly behind the character's facing, and no turning the
         // camera on its own: the view always points where the model looks.
+        // (The smooth chase camera was tried here and felt nauseating; how
+        // fast A/D turn is the client's camera turn speed option.)
         SetCameraMode(oPC, CAMERA_MODE_STIFF_CHASE_CAMERA);
         SetCameraFlags(oPC, CAMERA_FLAG_DISABLE_TURN | CAMERA_FLAG_DISABLE_ZOOM);
     }
@@ -340,10 +357,108 @@ void DoomHudFireAnim(object oPC)
     }
 }
 
+// ---- Doomguy face ----
+// The status bar face, as in Doom: five health levels (dm_stfst<level><look>,
+// level 0 healthy .. 4 nearly dead), glancing around while idle, plus short
+// special faces: rampage while firing, a turn when hurt, "ouch" on a big
+// hit, the evil grin on a weapon pickup, and the dead face.
+
+const string DOOM_FACE_KIND_VAR  = "DOOM_FACE_KIND";   // "", kill, tl, tr, ouch, evl
+const string DOOM_FACE_START_VAR = "DOOM_FACE_START";  // GetMicrosecondCounter() when shown
+const string DOOM_FACE_MS_VAR    = "DOOM_FACE_MS";     // how long it stays
+const string DOOM_FACE_LOOK_VAR  = "DOOM_FACE_LOOK";   // idle glance 0-2
+const string DOOM_FACE_SHOWN_VAR = "DOOM_FACE_SHOWN";  // last face sent to the HUD
+
+const int DOOM_FACE_FIRE_MS  = 400;
+const int DOOM_FACE_HURT_MS  = 500;
+const int DOOM_FACE_OUCH_MS  = 800;
+const int DOOM_FACE_GRIN_MS  = 1500;
+const int DOOM_FACE_OUCH_PCT = 20;   // a hit this big (% of max HP) makes the "ouch" face
+
+int DoomFaceLevel(object oPC)
+{
+    int nMax = GetMaxHitPoints(oPC);
+    int nPct = 100;
+    if (nMax > 0) nPct = (GetCurrentHitPoints(oPC) * 100) / nMax;
+    if (nPct > 100) nPct = 100;
+    if (nPct < 0) nPct = 0;
+    return (100 - nPct) * 5 / 101;  // Doom's ST_NUMPAINFACES formula
+}
+
+// Higher wins while both are showing, as Doom's face priorities.
+int DoomFaceRank(string sKind)
+{
+    if (sKind == "evl")  return 4;
+    if (sKind == "ouch") return 3;
+    if (sKind == "tl" || sKind == "tr") return 2;
+    if (sKind == "kill") return 1;
+    return 0;
+}
+
+// The special face still showing, or "" once it has expired.
+string DoomFaceActiveKind(object oPC)
+{
+    string sKind = GetLocalString(oPC, DOOM_FACE_KIND_VAR);
+    if (sKind == "") return "";
+    int nElapsed = (GetMicrosecondCounter() - GetLocalInt(oPC, DOOM_FACE_START_VAR)) / 1000;
+    if (nElapsed >= 0 && nElapsed < GetLocalInt(oPC, DOOM_FACE_MS_VAR)) return sKind;
+    SetLocalString(oPC, DOOM_FACE_KIND_VAR, "");
+    return "";
+}
+
+string DoomFaceResRef(object oPC)
+{
+    if (GetIsDead(oPC)) return "dm_stfdead0";
+    string sLevel = IntToString(DoomFaceLevel(oPC));
+    string sKind = DoomFaceActiveKind(oPC);
+    if (sKind == "tl" || sKind == "tr") return "dm_stf" + sKind + sLevel + "0";
+    if (sKind != "") return "dm_stf" + sKind + sLevel;
+    return "dm_stfst" + sLevel + IntToString(GetLocalInt(oPC, DOOM_FACE_LOOK_VAR));
+}
+
+void DoomHudFace(object oPC)
+{
+    int nToken = GetLocalInt(oPC, DOOM_VAR_HUD);
+    if (!nToken) return;
+    string sFace = DoomFaceResRef(oPC);
+    if (!DoomHasSprite(sFace) || sFace == GetLocalString(oPC, DOOM_FACE_SHOWN_VAR)) return;
+    SetLocalString(oPC, DOOM_FACE_SHOWN_VAR, sFace);
+    NuiSetBind(oPC, nToken, "face", JsonString(sFace));
+    NuiSetBind(oPC, nToken, "face_r", DoomSpriteRect(sFace, GetLocalFloat(oPC, DOOM_VAR_HUD_SCALE)));
+}
+
+// Shows special face sKind for nMs, unless a higher-priority one is showing.
+void DoomFaceShow(object oPC, string sKind, int nMs)
+{
+    if (DoomFaceRank(DoomFaceActiveKind(oPC)) > DoomFaceRank(sKind)) return;
+    SetLocalString(oPC, DOOM_FACE_KIND_VAR, sKind);
+    SetLocalInt(oPC, DOOM_FACE_START_VAR, GetMicrosecondCounter());
+    SetLocalInt(oPC, DOOM_FACE_MS_VAR, nMs);
+    DoomHudFace(oPC);
+    // Back to the idle face right when it ends, not at the next HUD tick.
+    DelayCommand(IntToFloat(nMs) / 1000.0 + 0.05, DoomHudFace(oPC));
+}
+
+// Called on every HP drop: a turn for small hits, "ouch" for big ones.
+void DoomFaceHurt(object oPC, int nDamage)
+{
+    int nMax = GetMaxHitPoints(oPC);
+    if (nMax > 0 && nDamage * 100 / nMax >= DOOM_FACE_OUCH_PCT)
+        DoomFaceShow(oPC, "ouch", DOOM_FACE_OUCH_MS);
+    else if (Random(2) == 0)
+        DoomFaceShow(oPC, "tl", DOOM_FACE_HURT_MS);
+    else
+        DoomFaceShow(oPC, "tr", DOOM_FACE_HURT_MS);
+}
+
 void DoomHudUpdate(object oPC)
 {
     int nToken = GetLocalInt(oPC, DOOM_VAR_HUD);
     if (!nToken) return;
+
+    // Idle glances: a new look direction about once a second.
+    if (Random(4) == 0) SetLocalInt(oPC, DOOM_FACE_LOOK_VAR, Random(3));
+    DoomHudFace(oPC);
 
     int nMax = GetMaxHitPoints(oPC);
     int nHpPct = 0;
@@ -365,10 +480,46 @@ void DoomHudUpdate(object oPC)
     }
 }
 
+// Centre crosshair: shots go along the player's facing, which the locked
+// first-person camera keeps at the centre of the screen.
+const string DOOM_XHAIR_ID = "doom_xhair";
+
+json DoomXhairLine(float x1, float y1, float x2, float y2)
+{
+    return NuiDrawListLine(JsonBool(TRUE), NuiColor(255, 255, 255, 200), JsonFloat(2.0),
+                           NuiVec(x1, y1), NuiVec(x2, y2));
+}
+
+void DoomCrosshairOpen(object oPC)
+{
+    int nOld = NuiFindWindow(oPC, DOOM_XHAIR_ID);
+    if (nOld) NuiDestroy(oPC, nOld);
+
+    float fSize = 40.0;
+    float c = fSize / 2.0;
+    json jLines = JsonArray();
+    jLines = JsonArrayInsert(jLines, DoomXhairLine(c - 10.0, c, c - 3.0, c));
+    jLines = JsonArrayInsert(jLines, DoomXhairLine(c + 3.0, c, c + 10.0, c));
+    jLines = JsonArrayInsert(jLines, DoomXhairLine(c, c - 10.0, c, c - 3.0));
+    jLines = JsonArrayInsert(jLines, DoomXhairLine(c, c + 3.0, c, c + 10.0));
+
+    float fScreenW = IntToFloat(GetPlayerDeviceProperty(oPC, PLAYER_DEVICE_PROPERTY_GUI_WIDTH));
+    float fScreenH = IntToFloat(GetPlayerDeviceProperty(oPC, PLAYER_DEVICE_PROPERTY_GUI_HEIGHT));
+    if (fScreenW <= 0.0) fScreenW = 1280.0;
+    if (fScreenH <= 0.0) fScreenH = 720.0;
+
+    json jWin = NuiWindow(NuiDrawList(NuiSpacer(), JsonBool(FALSE), jLines), JsonBool(FALSE),
+        NuiRect((fScreenW - fSize) / 2.0, (fScreenH - fSize) / 2.0, fSize, fSize),
+        JsonBool(FALSE), JsonBool(FALSE), JsonBool(FALSE),  // resizable, collapsed, closable
+        JsonBool(TRUE), JsonBool(FALSE), JsonBool(FALSE));  // transparent, border, accepts input
+    NuiCreate(oPC, jWin, DOOM_XHAIR_ID);
+}
+
 void DoomHudOpen(object oPC)
 {
     int nOld = NuiFindWindow(oPC, DOOM_HUD_ID);
     if (nOld) NuiDestroy(oPC, nOld);
+    DoomCrosshairOpen(oPC);
 
     float s = DoomHudScale(oPC);
     SetLocalFloat(oPC, DOOM_VAR_HUD_SCALE, s);
@@ -381,6 +532,7 @@ void DoomHudOpen(object oPC)
 
     jList = DoomHudImage(jList, jOn, JsonString("dm_stbar"), DoomHudRect(0.0, 168.0, 320.0, 32.0, s));
     jList = DoomHudImage(jList, jOn, JsonString("dm_starms"), DoomHudRect(104.0, 168.0, 40.0, 32.0, s));
+    jList = DoomHudImage(jList, jOn, NuiBind("face"), NuiBind("face_r"));
 
     jList = DoomHudNumberSlots(jList, "am", 44.0, 171.0, 14.0, 16.0, 3, s);
     jList = DoomHudNumberSlots(jList, "hp", 90.0, 171.0, 14.0, 16.0, 3, s);
@@ -421,6 +573,7 @@ void DoomHudOpen(object oPC)
 
     int nToken = NuiCreate(oPC, jWin, DOOM_HUD_ID);
     SetLocalInt(oPC, DOOM_VAR_HUD, nToken);
+    SetLocalString(oPC, DOOM_FACE_SHOWN_VAR, "");  // new window: resend the face
 
     // Fixed values: max ammo, and no rockets or cells in this prototype.
     DoomHudSetNumber(oPC, nToken, "max0_", DOOM_MAX_BULLETS, 3, "dm_stysnum");
@@ -495,9 +648,50 @@ void DoomSelectWeapon(object oPC, int nWeapon)
 
 void DoomApplyShield(object oPC);  // defined with the monster melee code
 
+// Doom's marine is far quicker than an NWN adventurer, and walking
+// backwards in NWN is especially slow. /speed N tunes it per player.
+const int    DOOM_PLAYER_SPEED   = 50;            // % faster than normal (0-99)
+const string DOOM_VAR_SPEED      = "DOOM_SPEED";  // set by /speed; 0 = use the default
+const string DOOM_SPEED_TAG      = "DOOM_SPEED";
+
+// NWN moves you backwards and sideways at walking pace, about half your
+// running speed. doom_move notices that and sets this flag, and the speed
+// bonus then doubles (EffectMovementSpeedIncrease is capped at 99%, so
+// backpedalling gets closer to forward speed but cannot fully match it).
+const string DOOM_VAR_MOVE_BACK  = "DOOM_MOVE_BACK";
+const float  DOOM_MOVE_TICK      = 0.1;
+
+int DoomPlayerSpeed(object oPC)
+{
+    int nSpeed = GetLocalInt(oPC, DOOM_VAR_SPEED);
+    if (nSpeed == 0) return DOOM_PLAYER_SPEED;
+    return nSpeed - 1;  // stored +1 so that /speed 0 can mean "normal NWN speed"
+}
+
+void DoomApplySpeed(object oPC)
+{
+    effect e = GetFirstEffect(oPC);
+    while (GetIsEffectValid(e))
+    {
+        if (GetEffectTag(e) == DOOM_SPEED_TAG)
+            RemoveEffect(oPC, e);
+        e = GetNextEffect(oPC);
+    }
+    int nSpeed = DoomPlayerSpeed(oPC);
+    if (GetLocalInt(oPC, DOOM_VAR_MOVE_BACK))
+    {
+        nSpeed = nSpeed * 2;
+        if (nSpeed > 99) nSpeed = 99;
+    }
+    if (nSpeed <= 0) return;
+    effect eSpeed = SupernaturalEffect(EffectMovementSpeedIncrease(nSpeed));
+    ApplyEffectToObject(DURATION_TYPE_PERMANENT, TagEffect(eSpeed, DOOM_SPEED_TAG), oPC);
+}
+
 void DoomResetLoadout(object oPC)
 {
     DoomApplyShield(oPC);
+    DoomApplySpeed(oPC);
     DoomGiveWeaponItem(oPC, DOOM_WEAPON_FIST);
     DoomGiveWeaponItem(oPC, DOOM_WEAPON_PISTOL);
     DoomGiveWeaponItem(oPC, DOOM_WEAPON_SHOTGUN);
@@ -609,6 +803,13 @@ void DoomSetupMelee(object oMon, string sResRef)
     DoomStripEquippedProperty(oMon, ITEM_PROPERTY_ON_HIT_PROPERTIES);
     DoomStripEquippedProperty(oMon, ITEM_PROPERTY_ON_MONSTER_HIT);
 
+    // Doom weapons do their listed damage to everything: no damage
+    // reduction (stock imps soak 5 per hit), resistances, or damage-type
+    // immunities (stock skeletons take half damage from piercing).
+    DoomStripEquippedProperty(oMon, ITEM_PROPERTY_DAMAGE_REDUCTION);
+    DoomStripEquippedProperty(oMon, ITEM_PROPERTY_DAMAGE_RESISTANCE);
+    DoomStripEquippedProperty(oMon, ITEM_PROPERTY_IMMUNITY_DAMAGE_TYPE);
+
     int nSlot;
     for (nSlot = 0; nSlot <= INVENTORY_SLOT_CWEAPON_B; nSlot++)
     {
@@ -643,9 +844,9 @@ void DoomApplyShield(object oPC)
 // and hits hard, and takes a lot of shooting to bring down.
 void DoomSetupBalor(object oMon)
 {
-    // Vorpal and other on-hit effects go in DoomSetupMelee, like for all monsters.
+    // Vorpal, on-hit effects and damage reduction go in DoomSetupMelee,
+    // like for all monsters.
     DoomStripSpellAbilities(oMon);
-    DoomStripEquippedProperty(oMon, ITEM_PROPERTY_DAMAGE_REDUCTION);
     ApplyEffectToObject(DURATION_TYPE_PERMANENT,
         SupernaturalEffect(EffectTemporaryHitpoints(DOOM_BALOR_EXTRA_HP)), oMon);
 }
@@ -791,6 +992,7 @@ int DoomApplyPickup(object oPC, string sKind)
         {
             SetLocalInt(oPC, DOOM_VAR_WEAPON, DOOM_WEAPON_SHOTGUN);
             DoomHudShowWeapon(oPC);
+            DoomFaceShow(oPC, "evl", DOOM_FACE_GRIN_MS);  // Doom's evil grin
         }
         DoomPickupMessage(oPC, "You got the shotgun!");
         return TRUE;

@@ -91,12 +91,15 @@ void DoomBallTick(object oBall)
             && fDz > -(DOOM_BALL_HEIGHT + 1.0) && fDz < 1.0)
         {
             // Doom imp fireball: 3-24, as % of the player's max HP.
-            effect eDamage = EffectDamage(DoomPercentDamage(oHit, 3, 24), DAMAGE_TYPE_FIRE);
-            // Credit the imp if it is still alive, so the player retaliates at it.
+            int nDamage = DoomPercentDamage(oHit, 3, 24);
+            // Credit the imp if it is still alive. NWN credits whoever
+            // *creates* an effect, so EffectDamage must be called inside the
+            // AssignCommand; created here it showed as "Invisible Object".
             if (GetIsObjectValid(oImp) && !GetIsDead(oImp))
-                AssignCommand(oImp, ApplyEffectToObject(DURATION_TYPE_INSTANT, eDamage, oHit));
+                AssignCommand(oImp, ApplyEffectToObject(DURATION_TYPE_INSTANT,
+                    EffectDamage(nDamage, DAMAGE_TYPE_FIRE), oHit));
             else
-                ApplyEffectToObject(DURATION_TYPE_INSTANT, eDamage, oHit);
+                ApplyEffectToObject(DURATION_TYPE_INSTANT, EffectDamage(nDamage, DAMAGE_TYPE_FIRE), oHit);
             DoomBallExplode(oBall, vPos);
             return;
         }

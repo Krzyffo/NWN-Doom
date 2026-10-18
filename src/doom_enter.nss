@@ -26,6 +26,7 @@ void main()
     {
         SetLocalInt(oPC, DOOM_VAR_ACTIVE, TRUE);
         DelayCommand(DOOM_TICK, ExecuteScript("doom_tick", oPC));
+        DelayCommand(DOOM_MOVE_TICK, ExecuteScript("doom_move", oPC));
     }
 
     DelayCommand(1.0, DoomArm(oPC));

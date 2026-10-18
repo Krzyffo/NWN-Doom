@@ -5,11 +5,11 @@ Neverwinter Nights played like Doom: first-person, fast, and click-to-shoot. Sur
 Bring any character of level 1-5. Monster damage scales with your hit points, so every level plays the same.
 
 --- FIRST TIME ---
-Open your inventory and drag the items "1: Fist", "2: Pistol" and "3: Shotgun" onto the quickbar slots F1, F2 and F3. You only need to do this once per character.
+Put the weapons on F1, F2 and F3: open your inventory and drag the items "1: Fist", "2: Pistol" and "3: Shotgun" onto those quickbar slots. Faster: make quickbar text macros that say /1, /2 and /3 instead; they switch weapons instantly.
 
 --- CONTROLS ---
 Move: W / S forward and back, A / D turn (or strafe, depending on your key setup). The camera always looks where you face.
-Shoot: left-click a monster. Your cursor is the crosshair. Clicking the ground fires too.
+Shoot: click anywhere. You fire straight ahead at the crosshair in the middle of the screen, so turn to aim. While your gun is out the mouse pointer is a small red dot: keep it on the ground or on a monster, because clicks on the sky do not register.
 Switch weapons: F1 Fist, F2 Pistol, F3 Shotgun.
 Open doors: click a door when you are standing next to it. Locked doors need their key.
 Pick up items: walk over them. Ammo, stimpacks and armor drop from dead monsters.
@@ -17,15 +17,17 @@ Pick up items: walk over them. Ammo, stimpacks and armor drop from dead monsters
 If right-click or Escape put your gun away, type /gun in chat to get it back.
 
 --- TIPS ---
+Turning feels slow or stiff? Raise the camera turn speed in Options > Controls.
 Imps throw slow fireballs. Strafe sideways to dodge them.
-The shotgun drops from a kill once you reach wave 2. It hits hard up close and can catch monsters standing next to your target.
+The shotgun drops from a kill once you reach wave 2. Its pellets spread, so it hits hardest up close and can catch several monsters at once.
 Armor soaks a third of the damage you take.
 A balor sometimes joins from wave 3. It is slow but very tough. Keep your distance.
 If you die, you are back at the start a few seconds later with a pistol.
 
 --- CHAT COMMANDS ---
 /1 /2 /3 - fist, pistol, shotgun (same as F1-F3)
-/gun - get your gun cursor back
+/gun - get your gun back out
+/speed 0-99 - how much faster than normal you run (default 50)
 /fps - switch between first and third person
 /lockcam - lock or unlock the camera to your facing
 /hud - redraw the status bar (after changing resolution)

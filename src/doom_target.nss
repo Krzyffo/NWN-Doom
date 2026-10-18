@@ -1,6 +1,9 @@
 // doom_target: module OnPlayerTarget. Every click in gun mode lands here.
-// Fires the current weapon at the clicked creature or spot (hitscan, no
-// attack roll), uses doors, then puts the player back into gun mode.
+// Clicking anywhere fires the current weapon straight ahead along the
+// player's facing, which the locked first-person camera keeps at the centre
+// of the screen (the crosshair). Shots are hitscan rays: the first monster
+// on the line is hit, no attack roll. Clicking a door up close uses it.
+// Then the player goes back into gun mode.
 
 #include "doom_inc"
 
@@ -17,61 +20,120 @@ void DoomHit(object oPC, object oVictim, int nDamage)
         AssignCommand(oVictim, ActionAttack(oPC));
 }
 
-int DoomCanShoot(object oPC, object oTarget)
+// ---- Rays ------------------------------------------------------------------
+// NWScript has no raycast, so a ray is tested against every creature in
+// range: a creature is hit if it is in front of the player, within its
+// body radius (+ aim assist) of the line, and in line of sight. The nearest
+// one along the line wins. Players are never hit.
+
+float DoomCreatureRadius(object oCreature)
 {
-    if (!GetIsObjectValid(oTarget) || GetIsDead(oTarget)) return FALSE;
-    if (GetDistanceBetween(oPC, oTarget) > DOOM_WEAPON_RANGE) return FALSE;
-    return LineOfSightObject(oPC, oTarget);
+    int nSize = GetCreatureSize(oCreature);
+    if (nSize <= CREATURE_SIZE_SMALL)  return 0.4;
+    if (nSize == CREATURE_SIZE_MEDIUM) return 0.6;
+    if (nSize == CREATURE_SIZE_LARGE)  return 1.0;
+    return 1.5;
 }
 
-void DoomPunch(object oPC, object oTarget)
+// Doom's bullet spread: two random numbers subtracted, so small offsets
+// are likelier than large ones, within +-DOOM_SPREAD_DEG.
+float DoomSpread()
 {
+    return IntToFloat(Random(1001) - Random(1001)) / 1000.0 * DOOM_SPREAD_DEG;
+}
+
+object DoomTraceRay(object oPC, float fAngle, float fRange, float fAssist)
+{
+    vector vFrom = GetPosition(oPC);
+    vector vDir = AngleToVector(fAngle);
+    object oBest = OBJECT_INVALID;
+    float fBest = fRange + 1.0;
+
+    // Search a little past the range so big creatures at the edge count.
+    float fSearch = fRange + 2.0;
+    location lHere = GetLocation(oPC);
+    object o = GetFirstObjectInShape(SHAPE_SPHERE, fSearch, lHere, FALSE, OBJECT_TYPE_CREATURE);
+    while (GetIsObjectValid(o))
+    {
+        if (o != oPC && !GetIsPC(o) && !GetIsDead(o))
+        {
+            vector vTo = GetPosition(o) - vFrom;
+            float fAlong = vTo.x * vDir.x + vTo.y * vDir.y;
+            float fRadius = DoomCreatureRadius(o);
+            if (fAlong > 0.0 && fAlong - fRadius <= fRange && fAlong < fBest)
+            {
+                float fPerp = fabs(vTo.x * vDir.y - vTo.y * vDir.x);
+                if (fPerp <= fRadius + fAssist && LineOfSightObject(oPC, o))
+                {
+                    oBest = o;
+                    fBest = fAlong;
+                }
+            }
+        }
+        o = GetNextObjectInShape(SHAPE_SPHERE, fSearch, lHere, FALSE, OBJECT_TYPE_CREATURE);
+    }
+    return oBest;
+}
+
+// Where a missed shot hits a wall (or runs out of range), for the spark.
+location DoomRayEnd(object oPC, float fAngle, float fRange)
+{
+    vector vEye = GetPosition(oPC);
+    vEye.z += DOOM_EYE_HEIGHT;
+    vector vDir = AngleToVector(fAngle);
+    vector vLast = vEye;
+    float f;
+    for (f = 1.5; f <= fRange; f += 1.5)
+    {
+        vector v = vEye + vDir * f;
+        if (!LineOfSightVector(vEye, v)) break;
+        vLast = v;
+    }
+    return Location(GetArea(oPC), vLast, 0.0);
+}
+
+// Fires one bullet or pellet along fAngle; returns TRUE if it hit.
+int DoomFireRay(object oPC, float fAngle, int nMin, int nMax)
+{
+    object oVictim = DoomTraceRay(oPC, fAngle, DOOM_WEAPON_RANGE, DOOM_AIM_ASSIST);
+    if (GetIsObjectValid(oVictim))
+    {
+        DoomHit(oPC, oVictim, DoomRandomRange(nMin, nMax));
+        return TRUE;
+    }
+    ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_COM_SPARKS_PARRY),
+                          DoomRayEnd(oPC, fAngle, DOOM_WEAPON_RANGE));
+    return FALSE;
+}
+
+// ---- Weapons ---------------------------------------------------------------
+
+void DoomPunch(object oPC)
+{
+    object oVictim = DoomTraceRay(oPC, GetFacing(oPC), DOOM_FIST_RANGE, DOOM_FIST_ASSIST);
     // Like Doom, the punch only makes a sound when it connects.
-    if (DoomCanShoot(oPC, oTarget) && GetDistanceBetween(oPC, oTarget) <= DOOM_FIST_RANGE)
+    if (GetIsObjectValid(oVictim))
     {
         DoomSfxAt(GetLocation(oPC), DOOM_VFX_PUNCH);  // at the spot: the first-person body is invisible
-        DoomHit(oPC, oTarget, DoomRandomRange(DOOM_FIST_MIN, DOOM_FIST_MAX));
+        DoomHit(oPC, oVictim, DoomRandomRange(DOOM_FIST_MIN, DOOM_FIST_MAX));
     }
 }
 
-void DoomFirePistol(object oPC, object oTarget, location lAim)
+// Like Doom, the first shot is dead accurate; holding the trigger spreads.
+void DoomFirePistol(object oPC, int bRefire)
 {
-    if (DoomCanShoot(oPC, oTarget))
-        DoomHit(oPC, oTarget, DoomRandomRange(DOOM_PISTOL_MIN, DOOM_PISTOL_MAX));
-    else
-        ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_COM_SPARKS_PARRY), lAim);
+    float fAngle = GetFacing(oPC);
+    if (bRefire) fAngle += DoomSpread();
+    DoomFireRay(oPC, fAngle, DOOM_PISTOL_MIN, DOOM_PISTOL_MAX);
 }
 
-void DoomFireShotgun(object oPC, object oTarget, location lAim)
+// Doom's shotgun: 7 pellets of 5-15, each with its own spread.
+void DoomFireShotgun(object oPC)
 {
-    int nPellets = DOOM_SHOTGUN_PELLETS;
-    int bHitMain = DoomCanShoot(oPC, oTarget);
-
-    // Roughly two thirds of the pellets land on the creature you clicked;
-    // the rest spray into whatever else is standing close to the aim point.
-    int nMain = 0;
-    if (bHitMain)
-    {
-        nMain = (nPellets * 2) / 3 + Random(2);
-        int nDamage = 0;
-        int i;
-        for (i = 0; i < nMain; i++) nDamage += DoomRandomRange(DOOM_PISTOL_MIN, DOOM_PISTOL_MAX);
-        DoomHit(oPC, oTarget, nDamage);
-    }
-
-    int nStray = nPellets - nMain;
-    object oOther = GetFirstObjectInShape(SHAPE_SPHERE, DOOM_SHOTGUN_SPLASH, lAim, TRUE, OBJECT_TYPE_CREATURE);
-    while (GetIsObjectValid(oOther) && nStray > 0)
-    {
-        if (oOther != oTarget && oOther != oPC && GetIsEnemy(oOther, oPC) && DoomCanShoot(oPC, oOther))
-        {
-            DoomHit(oPC, oOther, DoomRandomRange(DOOM_PISTOL_MIN, DOOM_PISTOL_MAX) * 2);
-            nStray -= 2;
-        }
-        oOther = GetNextObjectInShape(SHAPE_SPHERE, DOOM_SHOTGUN_SPLASH, lAim, TRUE, OBJECT_TYPE_CREATURE);
-    }
-    if (!bHitMain)
-        ApplyEffectAtLocation(DURATION_TYPE_INSTANT, EffectVisualEffect(VFX_COM_SPARKS_PARRY), lAim);
+    float fFacing = GetFacing(oPC);
+    int i;
+    for (i = 0; i < DOOM_SHOTGUN_PELLETS; i++)
+        DoomFireRay(oPC, fFacing + DoomSpread(), DOOM_PISTOL_MIN, DOOM_PISTOL_MAX);
 }
 
 // Doors are "used" by clicking them up close, like Doom's use key.
@@ -104,6 +166,14 @@ void main()
     object oPC = GetLastPlayerToSelectTarget();
     object oTarget = GetTargetingModeSelectedObject();
 
+    if (GetLocalInt(oPC, DOOM_VAR_DEBUG))
+    {
+        string sWhat = "nothing (cancelled)";
+        if (GetIsObjectValid(oTarget))
+            sWhat = "object type " + IntToString(GetObjectType(oTarget)) + " '" + GetName(oTarget) + "'";
+        SendMessageToPC(oPC, "[debug] click reached doom_target: " + sWhat);
+    }
+
     // Right-click / Escape cancels targeting: holster until "/gun".
     if (!GetIsObjectValid(oTarget))
     {
@@ -114,7 +184,8 @@ void main()
 
     if (GetIsDead(oPC)) return;
 
-    if (GetObjectType(oTarget) == OBJECT_TYPE_DOOR)
+    // A door right in front of you is used rather than shot.
+    if (GetObjectType(oTarget) == OBJECT_TYPE_DOOR && GetDistanceBetween(oPC, oTarget) <= 3.0)
     {
         DoomUseDoor(oPC, oTarget);
         DoomArm(oPC);
@@ -134,6 +205,7 @@ void main()
         DoomArm(oPC);
         return;
     }
+    int bRefire = nDelta >= 0 && nDelta < DOOM_REFIRE_MS;
 
     if (nWeapon != DOOM_WEAPON_FIST && DoomGetAmmo(oPC) <= 0)
     {
@@ -150,27 +222,23 @@ void main()
     }
 
     SetLocalInt(oPC, DOOM_VAR_LASTSHOT, nNow);
-    location lAim = Location(GetArea(oPC), GetTargetingModeSelectedPosition(), 0.0);
-    object oVictim = OBJECT_INVALID;
-    if (GetObjectType(oTarget) == OBJECT_TYPE_CREATURE && oTarget != oPC)
-        oVictim = oTarget;
-
     DoomHudFireAnim(oPC);
+    DoomFaceShow(oPC, "kill", DOOM_FACE_FIRE_MS);  // Doomguy's rampage face
     if (nWeapon == DOOM_WEAPON_FIST)
     {
-        DoomPunch(oPC, oVictim);
+        DoomPunch(oPC);
     }
     else if (nWeapon == DOOM_WEAPON_SHOTGUN)
     {
         DoomSfxAt(GetLocation(oPC), DOOM_VFX_SHOTGUN);  // at the spot: the first-person body is invisible
         SetLocalInt(oPC, DOOM_VAR_SHELLS, GetLocalInt(oPC, DOOM_VAR_SHELLS) - 1);
-        DoomFireShotgun(oPC, oVictim, lAim);
+        DoomFireShotgun(oPC);
     }
     else
     {
         DoomSfxAt(GetLocation(oPC), DOOM_VFX_PISTOL);  // at the spot: the first-person body is invisible
         SetLocalInt(oPC, DOOM_VAR_BULLETS, GetLocalInt(oPC, DOOM_VAR_BULLETS) - 1);
-        DoomFirePistol(oPC, oVictim, lAim);
+        DoomFirePistol(oPC, bRefire);
     }
 
     DoomHudUpdate(oPC);

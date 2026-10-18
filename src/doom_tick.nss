@@ -10,6 +10,8 @@ void DoomAbsorbDamage(object oPC)
     int nNow = GetCurrentHitPoints(oPC);
     int nLast = GetLocalInt(oPC, DOOM_VAR_LAST_HP);
     int nArmor = GetLocalInt(oPC, DOOM_VAR_ARMOR);
+    if (nNow < nLast && !GetIsDead(oPC))
+        DoomFaceHurt(oPC, nLast - nNow);
     if (nNow < nLast && nArmor > 0 && !GetIsDead(oPC))
     {
         int nSoak = (nLast - nNow) / 3;

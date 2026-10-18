@@ -13,16 +13,18 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 | Doom mechanic | How it works here |
 |---|---|
 | First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility. Stiff chase camera with camera turning disabled, so the view always points where the character faces (`/lockcam` toggles this) |
-| Moving | NWN's own WASD movement in chase-camera mode |
-| Shooting | The player is kept in targeting mode with an attack cursor. Each click fires `doom_target`, which deals damage instantly (no attack roll, no 6-second rounds) |
-| Weapons | 1 Fist (2-20, 2.5 m reach), 2 Pistol (5-15 per shot), 3 Shotgun (7 pellets of 5-15; stray pellets hit enemies near the aim point). Fire-rate cooldowns per weapon |
-| Switching weapons | Three inventory items, `1: Fist`, `2: Pistol`, `3: Shotgun`, that you put on F1-F3 |
+| Moving | NWN's own WASD movement, 50% faster than normal (Doom's marine is quick; `/speed N` tunes it). NWN moves you backwards and sideways at walking pace, so `doom_move` checks your direction every 0.1 s and doubles the bonus while you are not moving forwards (the engine caps it at +99%, so backpedalling gets closer to forward speed but not equal). Turning speed is the client's Options > Controls camera turn speed, which the module cannot change; the default (1.0, the minimum) feels stiff, so raise it |
+| Shooting | The player is kept in targeting mode, so every click fires `doom_target`. Shots go straight along the player's facing (the locked camera keeps it at the centre crosshair), not to the cursor: each bullet or pellet is a hitscan ray that hits the first monster on the line within its body radius + 0.4 m aim assist and in line of sight, with no attack roll. Misses spark on the wall the ray reaches. Players are never hit |
+| Weapons | 1 Fist (2-20, 2.5 m reach, more aim assist), 2 Pistol (5-15 per shot; the first shot is exact, rapid follow-ups spread up to 5.6 degrees like Doom), 3 Shotgun (7 pellets of 5-15, each its own ray with Doom's 5.6 degree spread). Fire-rate cooldowns per weapon. Tuned at the top of `doom_inc.nss` |
+| Switching weapons | Text macros on F1-F3 that send `/1` `/2` `/3` (instant), added to a character file by `tools/doom_quickbar.py`; or the three inventory items `1: Fist`, `2: Pistol`, `3: Shotgun` dragged onto the quickbar (1 s item activation) |
+| Cursor | In gun mode the pointer is a small red dot: targeting uses the stock DM kill cursor (`MOUSECURSOR_KILL`), whose TGA and DDS images the hak replaces (the dot sits at the top-left click point, like the stock cursors' tips). Shots go to the centre crosshair, but the sky cannot be clicked in targeting mode, so the dot shows where the pointer is: keep it on the ground or on monsters. `/cursor` switches to the visible attack cursor |
 | Ammo | Bullets and shells tracked as local variables. Running dry falls back to the pistol, then the fist |
-| HUD | Doom's status bar (ammo, health %, arms panel, armor %, ammo table) and the weapon sprite with firing frames and muzzle flash, drawn with NUI |
+| HUD | Doom's status bar (ammo, health %, arms panel, Doomguy's face, armor %, ammo table) and the weapon sprite with firing frames and muzzle flash, drawn with NUI. The face follows Doom: five health levels, idle glances, the rampage face when firing, a turn when hurt, "ouch" on hits of 20% or more, the evil grin on picking up the shotgun, and the dead face |
 | Pickups from kills | `doom_mdeath` rolls a drop: clip, shells, stimpack, armor bonus, or the shotgun. Walking over a pickup collects it |
 | Armor | Absorbs a third of incoming damage until depleted |
 | Doors | Click a door within 3 m to open it; locked doors need their key item |
 | Waves | Wave 1 spawns on entering; each cleared wave triggers a bigger one 5 s later. Zombies and imps from wave 1, skeletons from wave 3 |
+| Monster defences | Monsters lose damage reduction, resistances and damage-type immunities from their stock gear (imps soaked 5 per hit, skeletons halved piercing), so every gun does its Doom damage |
 | Monster damage | A percentage of the player's max HP, using Doom's damage numbers as percents, so a level 1 and a level 5 character face the same fight. NWN still rolls monster attacks, but a damage shield on the player (DR 50/+20) soaks the weapon damage; each hit then runs `doom_hit` (via the stock On Hit: Unique Power tag-based item script) for the real damage, at most once per monster cooldown. Zombie 3-12% (1.2 s), skeleton 4-10% (1.2 s), imp claw and fireball 3-24% (1.2 s), balor 10-30% (2 s). Tuned in `DoomSetupMelee` |
 | Monster speed | Zombies and imps +50%, skeletons -30% |
 | Balor | Rare (25% per wave from wave 3, one at a time), 40% slower, melee only, ~300 HP. The stock `nw_balorboss` loses all spell-like abilities (Implosion, Fire Storm, ...), its vorpal and other on-hit effects, and its damage reduction |
@@ -31,10 +33,20 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 
 ### Weapon keys
 
+No script can change a quickbar in game, so the weapon keys go on before
+you play: `py tools/doom_quickbar.py CHARACTER` turns F1-F3 of a character
+in your localvault into text macros sending `/1`, `/2`, `/3`. It backs the
+character file up first (`CHARACTER.bic.bak-<timestamp>`). Single-player
+games keep the quickbar in the save, not the character file, so this
+stays for every new game with that character.
+
+Without the tool:
+
 The weapon items are created in your inventory on entering the module.
-Drag them onto the quickbar once: `1: Fist` to F1, `2: Pistol` to F2,
-`3: Shotgun` to F3. The quickbar is saved with the character. The shotgun
-item only works after you have picked up a shotgun.
+Drag them onto the quickbar: `1: Fist` to F1, `2: Pistol` to F2,
+`3: Shotgun` to F3. That lasts for the saved game, but a new game from the
+same character file starts with its old quickbar again. The shotgun item
+only works after you have picked up a shotgun.
 
 Using a quickbar item takes NWN's 1-second item activation, so switching
 is slower than in Doom.
@@ -46,10 +58,13 @@ is slower than in Doom.
 | `/1` `/2` `/3` | Select fist / pistol / shotgun (same as F1-F3) |
 | `/idkfa` | Cheat for testing: all weapons, full ammo, 200% armor |
 | `/balor` | Testing: spawn a balor 12 m ahead |
-| `/gun` | Re-arm after right-click / Escape cancelled the gun cursor |
+| `/gun` | Re-arm after right-click / Escape put the gun away |
 | `/fps` | Toggle first-person / normal camera |
 | `/lockcam` | Toggle locking the camera to where your character faces (on by default) |
 | `/wave` | Spawn the next wave now |
+| `/speed N` | Move N% faster than normal NWN speed (0-99, default 50); `/speed` alone shows it |
+| `/cursor` | Toggle the hidden / visible gun-mode cursor |
+| `/debug` | Toggle logging every gun click to chat (for troubleshooting) |
 | `/hud` | Recreate the HUD (e.g. after changing resolution) |
 
 ## Setting up a test module
@@ -63,6 +78,8 @@ is slower than in Doom.
    punch and imp fireball sounds. Use the official `freedoom2.wad`:
    some repacked WADs ship empty sound stubs, and the tool warns when a
    sound has no audio (the game then stays silent for it).
+   It also extracts Doomguy's status bar faces (Freedoom 0.13 has all 42;
+   some repacked WADs have blank placeholders, which are skipped).
    The sounds are played through rows 10100-10105 that the tool appends to
    the game's `visualeffects.2da` in the hak (`DOOM_VFX_*` in `doom_art.nss`):
    applying an effect plays reliably, while `PlaySound` depends on the
@@ -129,6 +146,7 @@ module: the zip contains the module exactly as last saved by the toolset.
 - `tools/wad_to_hak.py`: WAD art to TGA, hak packing and install.
 - `tools/build.py`: compile + pack the scripts in one step.
 - `tools/package.py`: checks the module and builds the player release zip.
+- `tools/doom_quickbar.py`: puts the `/1` `/2` `/3` weapon macros on a character's F1-F3.
 - `docs/module_description.txt`: module description / player controls.
 - `licenses/`: Freedoom's licence (`FREEDOOM-COPYING.txt`) and contributor list
   (`FREEDOOM-CREDITS.txt`), both shipped with the art.
