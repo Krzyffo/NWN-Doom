@@ -38,9 +38,10 @@ running, and turns the module's hostile creatures into Doom monsters.
   friendly NPCs. Walk over pickups to collect them.
 - Turning feels stiff? Raise the camera turn speed in Options > Controls.
 
-Faster weapon keys: `py tools/doom_quickbar.py CHARACTER` puts text macros
-for `/1` `/2` `/3` on a character's F1-F3, which switch instantly (it backs
-the character file up first).
+Faster weapon keys: quickbar text macros saying `/1`, `/2`, `/3` switch
+instantly. With this repository and Python, `py tools/doom_quickbar.py
+CHARACTER` puts them on a character's F1-F3 for you (it backs the
+character file up first).
 
 ## Chat commands
 

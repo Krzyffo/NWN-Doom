@@ -5,37 +5,24 @@ module or a chapter of the official campaign, into a Doom-style game. The
 background (which events NWN-Doom takes over, the variables it reads) is
 in [how_it_works.md](how_it_works.md).
 
-You need the toolset (`bin\win32\nwtoolset.exe` in the game folder), Python
-(`py`), and this repository.
+All you need is the NWN:EE toolset (`bin\win32\nwtoolset.exe` in the game
+folder).
 
-## 1. Get the art and the scripts
+## 1. Unzip the kit
 
-**From a release:** download `nwn-doom-kit-<version>.zip` from the
-[releases page](https://github.com/Krzyffo/NWN-Doom/releases) and unzip
-it into your NWN user folder (normally `Documents\Neverwinter Nights`).
-That puts `nwn_doom.hak` in `hak\` and the scripts in `erf\nwn_doom.erf`;
-import that file in step 4 instead of `build/nwn_doom.erf`. Skip to step 2.
+Download `nwn-doom-kit-<version>.zip` from the
+[latest release](https://github.com/Krzyffo/NWN-Doom/releases/latest) and
+unzip it into your NWN user folder (normally `Documents\Neverwinter Nights`).
+That puts the art in `hak\nwn_doom.hak` and the scripts, already compiled,
+in `erf\nwn_doom.erf`.
 
-**From this repository:** once, if you have not done it yet:
-
-```
-py tools/wad_to_hak.py path\to\freedoom2.wad
-```
-
-This writes `nwn_doom.hak` into your NWN `hak` folder. Then, whenever the
-scripts change:
-
-```
-py tools/build.py
-```
-
-This writes `build/nwn_doom.erf` with the compiled `doom_*` scripts.
+(Changing the scripts yourself? Build them as in [building.md](building.md)
+and import `build/nwn_doom.erf` in step 4 instead.)
 
 ## 2. Make a copy of the module
 
 Importing scripts and changing events edits the module file, so work on a
-copy. Your modules are in the `modules` folder of your NWN user directory
-(normally `Documents\Neverwinter Nights`, here `G:\nwnData`).
+copy. Your modules are in the `modules` folder of your NWN user folder.
 
 Copy `YourModule.mod` to `YourModule-doom.mod` and open the copy in the
 toolset.
@@ -70,9 +57,9 @@ and two haks replacing it conflict (the higher one in the list wins).
 
 ## 4. Import the scripts
 
-**File > Import...**, select `build/nwn_doom.erf`, import everything. The
-`doom_*` scripts appear under **Scripts**. When re-importing a newer build,
-let it overwrite.
+**File > Import...**, select `nwn_doom.erf` from the `erf` folder of your
+NWN user folder, import everything. The `doom_*` scripts appear under
+**Scripts**. When importing a newer version later, let it overwrite.
 
 ## 5. Start NWN-Doom when the module loads
 
@@ -126,7 +113,8 @@ your hit points.
 - WASD moves, clicking shoots straight ahead at the crosshair.
 - Doors, chests, items and friendly NPCs are used by clicking them up close.
 - Weapons: drag `1: Fist`, `2: Pistol`, `3: Shotgun` from the inventory to
-  F1-F3, or set up text macros with `py tools/doom_quickbar.py CHARACTER`.
+  F1-F3, or put quickbar text macros saying `/1`, `/2`, `/3` there, which
+  switch instantly.
 - `/doom` switches to normal NWN controls and back, e.g. for a long
   conversation or a puzzle. `/gun` re-arms after right-click or Escape.
 
