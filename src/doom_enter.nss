@@ -19,14 +19,13 @@ void main()
     SetGuiPanelDisabled(oPC, GUI_PANEL_MINIMAP, TRUE);
     SetGuiPanelDisabled(oPC, GUI_PANEL_COMPASS, TRUE);
 
-    SendMessageToPC(oPC, "NWN-Doom: WASD to move, click to shoot. Weapons: drag the items '1: Fist', '2: Pistol' and '3: Shotgun' from your inventory to F1, F2, F3 (once). Chat: /gun re-arm, /fps camera, /wave next wave, /hud redraw HUD.");
+    SendMessageToPC(oPC, "NWN-Doom: WASD to move, click to shoot. Weapons: drag the items '1: Fist', '2: Pistol' and '3: Shotgun' from your inventory to F1, F2, F3. Chat: /gun re-arm, /fps camera, /wave next wave, /hud redraw HUD.");
 
     // Start the loop only once per player.
     if (!GetLocalInt(oPC, DOOM_VAR_ACTIVE))
     {
         SetLocalInt(oPC, DOOM_VAR_ACTIVE, TRUE);
         DelayCommand(DOOM_TICK, ExecuteScript("doom_tick", oPC));
-        DelayCommand(DOOM_MOVE_TICK, ExecuteScript("doom_move", oPC));
     }
 
     DelayCommand(1.0, DoomArm(oPC));

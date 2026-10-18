@@ -176,6 +176,11 @@ void DoomClearFx(object oPC)
     }
 }
 
+// Camera pitch in first person, in NWN's degrees (90 = level). Slightly
+// below level shows a bit more ground under the cursor dot; the sky cannot
+// be clicked in gun mode.
+const float DOOM_CAM_PITCH = 88.0;
+
 // Set by the /lockcam chat command to let the camera turn freely again.
 const string DOOM_VAR_CAM_FREE = "DOOM_CAM_FREE";
 
@@ -193,13 +198,18 @@ void DoomCameraFirstPerson(object oPC)
         // camera on its own: the view always points where the model looks.
         // (The smooth chase camera was tried here and felt nauseating; how
         // fast A/D turn is the client's camera turn speed option.)
+        // Like Doom, no looking up or down either: tilt is disabled and the
+        // pitch limits are pinned to one value.
         SetCameraMode(oPC, CAMERA_MODE_STIFF_CHASE_CAMERA);
-        SetCameraFlags(oPC, CAMERA_FLAG_DISABLE_TURN | CAMERA_FLAG_DISABLE_ZOOM);
+        SetCameraFlags(oPC, CAMERA_FLAG_DISABLE_TURN | CAMERA_FLAG_DISABLE_TILT | CAMERA_FLAG_DISABLE_ZOOM);
     }
     SetCameraHeight(oPC, 1.75);
-    // Pitch near horizontal, distance as close as the client allows.
-    SetCameraLimits(oPC, 70.0, 100.0, 0.1, 0.4);
-    SetCameraFacing(GetFacing(oPC), 0.2, 88.0, CAMERA_TRANSITION_TYPE_SNAP);
+    // Distance as close as the client allows.
+    if (GetLocalInt(oPC, DOOM_VAR_CAM_FREE))
+        SetCameraLimits(oPC, 70.0, 100.0, 0.1, 0.4);
+    else
+        SetCameraLimits(oPC, DOOM_CAM_PITCH, DOOM_CAM_PITCH, 0.1, 0.4);
+    SetCameraFacing(GetFacing(oPC), 0.2, DOOM_CAM_PITCH, CAMERA_TRANSITION_TYPE_SNAP);
 
     // Hide the player's own body so it does not block the view.
     effect eInvis = SupernaturalEffect(EffectVisualEffect(VFX_DUR_CUTSCENE_INVISIBILITY));
@@ -648,18 +658,15 @@ void DoomSelectWeapon(object oPC, int nWeapon)
 
 void DoomApplyShield(object oPC);  // defined with the monster melee code
 
-// Doom's marine is far quicker than an NWN adventurer, and walking
-// backwards in NWN is especially slow. /speed N tunes it per player.
-const int    DOOM_PLAYER_SPEED   = 50;            // % faster than normal (0-99)
+// Doom's marine is far quicker than an NWN adventurer. NWN caps movement
+// speed at +50% (measured: +99% and Haste gave no more), so that is the
+// default. Backwards and sideways NWN moves at walking pace (about 3 and
+// 1.6 m/s at the cap, against 6 m/s forwards), and no effect gets past
+// the cap to change that. /speed N tunes the bonus per player.
+const int    DOOM_PLAYER_SPEED   = 50;            // % faster than normal; 50 is the engine cap
+const int    DOOM_MAX_SPEED      = 50;
 const string DOOM_VAR_SPEED      = "DOOM_SPEED";  // set by /speed; 0 = use the default
 const string DOOM_SPEED_TAG      = "DOOM_SPEED";
-
-// NWN moves you backwards and sideways at walking pace, about half your
-// running speed. doom_move notices that and sets this flag, and the speed
-// bonus then doubles (EffectMovementSpeedIncrease is capped at 99%, so
-// backpedalling gets closer to forward speed but cannot fully match it).
-const string DOOM_VAR_MOVE_BACK  = "DOOM_MOVE_BACK";
-const float  DOOM_MOVE_TICK      = 0.1;
 
 int DoomPlayerSpeed(object oPC)
 {
@@ -678,11 +685,6 @@ void DoomApplySpeed(object oPC)
         e = GetNextEffect(oPC);
     }
     int nSpeed = DoomPlayerSpeed(oPC);
-    if (GetLocalInt(oPC, DOOM_VAR_MOVE_BACK))
-    {
-        nSpeed = nSpeed * 2;
-        if (nSpeed > 99) nSpeed = 99;
-    }
     if (nSpeed <= 0) return;
     effect eSpeed = SupernaturalEffect(EffectMovementSpeedIncrease(nSpeed));
     ApplyEffectToObject(DURATION_TYPE_PERMANENT, TagEffect(eSpeed, DOOM_SPEED_TAG), oPC);

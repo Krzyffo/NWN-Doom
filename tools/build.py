@@ -11,6 +11,7 @@ The compiler comes from the neverwinter.nim release, unzipped into
 tools/neverwinter/ (https://github.com/niv/neverwinter.nim/releases).
 """
 import os
+import shutil
 import subprocess
 import sys
 
@@ -25,7 +26,9 @@ NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")  # see [Alias] HD0 in nwn.i
 def main():
     if not os.path.exists(COMPILER):
         sys.exit(f"compiler not found: {COMPILER}")
-    os.makedirs(build_erf.NCS, exist_ok=True)
+    # Start clean, so a deleted script's old .ncs is not packed into the ERF.
+    shutil.rmtree(build_erf.NCS, ignore_errors=True)
+    os.makedirs(build_erf.NCS)
     result = subprocess.run([
         COMPILER, "--root", NWN_ROOT, "--userdirectory", NWN_USER,
         "--no-require-entry-point", "-y", "-d", build_erf.NCS, "-c", build_erf.SRC,

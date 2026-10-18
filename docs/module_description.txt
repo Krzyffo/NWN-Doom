@@ -27,7 +27,7 @@ If you die, you are back at the start a few seconds later with a pistol.
 --- CHAT COMMANDS ---
 /1 /2 /3 - fist, pistol, shotgun (same as F1-F3)
 /gun - get your gun back out
-/speed 0-99 - how much faster than normal you run (default 50)
+/speed 0-50 - how much faster than normal you run (default 50, the most the game allows)
 /fps - switch between first and third person
 /lockcam - lock or unlock the camera to your facing
 /hud - redraw the status bar (after changing resolution)

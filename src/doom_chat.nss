@@ -35,18 +35,18 @@ void main()
     }
     else if (GetStringLeft(sMsg, 7) == "/speed " || sMsg == "/speed")
     {
-        // /speed N: move N% faster than normal NWN speed (0-99).
+        // /speed N: move N% faster than normal NWN speed (0-50, the engine cap).
         string sArg = GetStringRight(sMsg, GetStringLength(sMsg) - 6);
         while (GetStringLeft(sArg, 1) == " ") sArg = GetStringRight(sArg, GetStringLength(sArg) - 1);
         if (sArg == "")
         {
-            SendMessageToPC(oPC, "Speed: +" + IntToString(DoomPlayerSpeed(oPC)) + "%. Use /speed 0-99.");
+            SendMessageToPC(oPC, "Speed: +" + IntToString(DoomPlayerSpeed(oPC)) + "%. Use /speed 0-" + IntToString(DOOM_MAX_SPEED) + ".");
         }
         else
         {
             int nSpeed = StringToInt(sArg);
             if (nSpeed < 0) nSpeed = 0;
-            if (nSpeed > 99) nSpeed = 99;
+            if (nSpeed > DOOM_MAX_SPEED) nSpeed = DOOM_MAX_SPEED;
             SetLocalInt(oPC, DOOM_VAR_SPEED, nSpeed + 1);
             DoomApplySpeed(oPC);
             SendMessageToPC(oPC, "Speed: +" + IntToString(nSpeed) + "%.");

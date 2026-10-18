@@ -12,8 +12,8 @@ no NWNX, no custom blueprints. The Doom art comes from a WAD you supply.
 
 | Doom mechanic | How it works here |
 |---|---|
-| First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility. Stiff chase camera with camera turning disabled, so the view always points where the character faces (`/lockcam` toggles this) |
-| Moving | NWN's own WASD movement, 50% faster than normal (Doom's marine is quick; `/speed N` tunes it). NWN moves you backwards and sideways at walking pace, so `doom_move` checks your direction every 0.1 s and doubles the bonus while you are not moving forwards (the engine caps it at +99%, so backpedalling gets closer to forward speed but not equal). Turning speed is the client's Options > Controls camera turn speed, which the module cannot change; the default (1.0, the minimum) feels stiff, so raise it |
+| First-person view | `SetCameraLimits` / `SetCameraHeight` pull the camera into the head; the player's body gets cutscene invisibility. Stiff chase camera with camera turning and tilting disabled and the pitch pinned (`DOOM_CAM_PITCH`), so the view always looks straight ahead where the character faces, like Doom (`/lockcam` toggles this) |
+| Moving | NWN's own WASD movement, 50% faster than normal: the engine caps movement bonuses at +50% (measured; +99% and Haste give no more). Backwards and sideways NWN moves at walking pace, about 3 and 1.6 m/s against 6 m/s forwards, and no effect gets past the cap to change that. Turning speed is the client's Options > Controls camera turn speed, which the module cannot change; the default (1.0, the minimum) feels stiff, so raise it |
 | Shooting | The player is kept in targeting mode, so every click fires `doom_target`. Shots go straight along the player's facing (the locked camera keeps it at the centre crosshair), not to the cursor: each bullet or pellet is a hitscan ray that hits the first monster on the line within its body radius + 0.4 m aim assist and in line of sight, with no attack roll. Misses spark on the wall the ray reaches. Players are never hit |
 | Weapons | 1 Fist (2-20, 2.5 m reach, more aim assist), 2 Pistol (5-15 per shot; the first shot is exact, rapid follow-ups spread up to 5.6 degrees like Doom), 3 Shotgun (7 pellets of 5-15, each its own ray with Doom's 5.6 degree spread). Fire-rate cooldowns per weapon. Tuned at the top of `doom_inc.nss` |
 | Switching weapons | Text macros on F1-F3 that send `/1` `/2` `/3` (instant), added to a character file by `tools/doom_quickbar.py`; or the three inventory items `1: Fist`, `2: Pistol`, `3: Shotgun` dragged onto the quickbar (1 s item activation) |
@@ -62,7 +62,7 @@ is slower than in Doom.
 | `/fps` | Toggle first-person / normal camera |
 | `/lockcam` | Toggle locking the camera to where your character faces (on by default) |
 | `/wave` | Spawn the next wave now |
-| `/speed N` | Move N% faster than normal NWN speed (0-99, default 50); `/speed` alone shows it |
+| `/speed N` | Move N% faster than normal NWN speed (0-50, default 50, the engine's cap); `/speed` alone shows it |
 | `/cursor` | Toggle the hidden / visible gun-mode cursor |
 | `/debug` | Toggle logging every gun click to chat (for troubleshooting) |
 | `/hud` | Recreate the HUD (e.g. after changing resolution) |
