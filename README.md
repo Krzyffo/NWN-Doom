@@ -6,7 +6,7 @@ bar and Doomguy's face, monster waves, and ammo, stimpacks and armor
 dropping from kills. Plain NWScript, art and sounds from
 [Freedoom](https://freedoom.github.io/).
 
-[![NWN-Doom gameplay video](https://img.youtube.com/vi/eMoq1PXZjkc/hqdefault.jpg)](https://www.youtube.com/watch?v=eMoq1PXZjkc)
+[![NWN-Doom gameplay video](https://img.youtube.com/vi/eMoq1PXZjkc/maxresdefault.jpg)](https://www.youtube.com/watch?v=eMoq1PXZjkc)
 
 [Watch it in action on YouTube](https://www.youtube.com/watch?v=eMoq1PXZjkc).
 
