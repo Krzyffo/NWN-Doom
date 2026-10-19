@@ -10,11 +10,12 @@
   16-bit WAVs named dm_<lump> (e.g. dm_dspistol.wav).
 - Generates src/doom_art.nss with each weapon frame's screen position,
   computed the way Doom places player sprites above the status bar.
-- Packs build/nwn_doom.hak and copies it to the NWN hak folder.
+- Packs build/nwn_doom.hak and copies it to the NWN hak folder, if that
+  is found (see tools/nwn_paths.py).
 
 Works with id's doom.wad/doom2.wad and with Freedoom. Lumps that are
 1x1 placeholders (Freedoom has no status bar face) are skipped.
-Paths can be overridden with DOOM_WAD and NWN_USER.
+The WAD can also be given with the DOOM_WAD environment variable.
 """
 import os
 import re
@@ -23,10 +24,9 @@ import struct
 import sys
 
 import build_erf
+import nwn_paths
 
 ROOT = build_erf.ROOT
-WAD = os.environ.get("DOOM_WAD", r"E:\Users\Krzysiek\Downloads\freedoom-0.13.0\freedoom2.wad")
-NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")
 ART_DIR = os.path.join(ROOT, "build", "art")
 HAK_OUT = os.path.join(ROOT, "build", "nwn_doom.hak")
 NSS_OUT = os.path.join(ROOT, "src", "doom_art.nss")
@@ -155,7 +155,9 @@ def write_tga(path, w, h, pixels, scale):
 
 
 def main():
-    wad = sys.argv[1] if len(sys.argv) > 1 else WAD
+    wad = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("DOOM_WAD")
+    if not wad:
+        raise SystemExit("usage: py tools/wad_to_hak.py path/to/freedoom2.wad (or set DOOM_WAD)")
     lumps = read_wad(wad)
     if "PLAYPAL" not in lumps:
         raise SystemExit("WAD has no PLAYPAL palette")
@@ -206,12 +208,14 @@ def main():
     write_art_include(sprites, vfx_constants)
     build_erf.write_erf(HAK_OUT, written, b"HAK ")
 
-    hak_dir = os.path.join(NWN_USER, "hak")
+    user = nwn_paths.nwn_user(required=False)
+    hak_dir = os.path.join(user, "hak") if user else ""
     if os.path.isdir(hak_dir):
         shutil.copy2(HAK_OUT, os.path.join(hak_dir, "nwn_doom.hak"))
         print(f"installed {os.path.join(hak_dir, 'nwn_doom.hak')}")
     else:
-        print(f"hak folder not found ({hak_dir}); copy build/nwn_doom.hak there yourself")
+        print("NWN hak folder not found (set NWN_USER, see tools/nwn_paths.py); "
+              "copy build/nwn_doom.hak there yourself")
 
 
 # Gun mode uses the stock DM "kill" cursor (MOUSECURSOR_KILL), which players

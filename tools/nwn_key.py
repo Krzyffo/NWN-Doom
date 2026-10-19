@@ -10,8 +10,8 @@ import struct
 import sys
 import fnmatch
 
-NWN_ROOT = os.environ.get(
-    "NWN_ROOT", r"G:\SteamLibrary\steamapps\common\Neverwinter Nights")
+import nwn_paths
+
 
 RES_TYPES = {
     2009: "nss", 2010: "ncs", 2017: "2da", 2025: "uti", 2027: "utc",
@@ -43,7 +43,7 @@ def read_key(key_path):
 
 
 def all_entries():
-    data_dir = os.path.join(NWN_ROOT, "data")
+    data_dir = os.path.join(nwn_paths.nwn_root(), "data")
     for key in ("nwn_base.key", "nwn_retail.key"):
         path = os.path.join(data_dir, key)
         if not os.path.exists(path):
@@ -54,7 +54,7 @@ def all_entries():
 
 
 def read_bif_resource(bif_rel, res_idx):
-    path = os.path.join(NWN_ROOT, bif_rel)
+    path = os.path.join(nwn_paths.nwn_root(), bif_rel)
     with open(path, "rb") as f:
         sig, ver, var_count, _fixed, var_off = struct.unpack("<4s4sIII", f.read(20))
         if sig != b"BIFF":

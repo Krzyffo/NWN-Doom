@@ -64,9 +64,29 @@ compiles them.
 
 The module and the hak live in your NWN user folder (`modules`, `hak`),
 normally `Documents\Neverwinter Nights`; the `[Alias]` section of `nwn.ini`
-can move it (on the dev machine it is `G:\nwnData`). Logs are under `logs`.
-The tools read the location from the `NWN_USER` environment variable when
-it is set.
+can move it. Logs are under `logs`.
+
+## Where the tools look for the game
+
+No paths are stored in the repository. `tools/nwn_paths.py` finds:
+
+- **The game's install folder** (the one with `data` in it): from the
+  `NWN_ROOT` environment variable, else your Steam libraries. The script
+  compiler and `nwn_key.py` need it.
+- **Your NWN user folder:** from `NWN_USER` (or `NWN_HOME`), else
+  `Documents\Neverwinter Nights`. `wad_to_hak.py` installs the hak there,
+  `package.py` reads the module from it, and `doom_quickbar.py` finds
+  characters in it.
+
+If the game or the user folder is somewhere else, set the variable once and
+open a new terminal:
+
+```
+setx NWN_USER "D:\Games\NWN user folder"
+```
+
+The WAD for `wad_to_hak.py` is given on the command line, or with the
+`DOOM_WAD` variable.
 
 To add the scripts to an existing module instead, follow
 [adding_to_a_module.md](adding_to_a_module.md) with `build/nwn_doom.erf`.
@@ -108,6 +128,8 @@ publish the zips yourself (GitHub release, Neverwinter Vault).
   contents.
 - `tools/nwn_key.py`: lists or extracts stock resources from the game's
   KEY/BIF archives, e.g. `py tools/nwn_key.py list "nw_imp*" --type utc`.
+- `tools/nwn_paths.py`: finds the game and your NWN user folder for the
+  other tools (see [Where the tools look for the game](#where-the-tools-look-for-the-game)).
 - `docs/`: this page, [how_it_works.md](how_it_works.md),
   [adding_to_a_module.md](adding_to_a_module.md) and
   `module_description.txt`.

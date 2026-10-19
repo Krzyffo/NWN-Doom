@@ -38,9 +38,9 @@ import sys
 import zipfile
 
 import build_erf
+import nwn_paths
 
 ROOT = build_erf.ROOT
-NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")
 GFF_TOOL = os.path.join(ROOT, "tools", "neverwinter", "nwn_gff.exe")
 DESCRIPTION = os.path.join(ROOT, "docs", "module_description.txt")
 LICENSE = os.path.join(ROOT, "licenses", "FREEDOOM-COPYING.txt")
@@ -150,7 +150,8 @@ def check_module(mod_path):
 
 
 def find_hak():
-    for path in (os.path.join(NWN_USER, "hak", HAK_NAME + ".hak"),
+    user = nwn_paths.nwn_user(required=False)
+    for path in ((os.path.join(user, "hak", HAK_NAME + ".hak") if user else ""),
                  os.path.join(ROOT, "build", HAK_NAME + ".hak")):
         if os.path.exists(path):
             return path
@@ -165,9 +166,10 @@ def main():
                         help="version for the zip name and README (default: today's date)")
     args = parser.parse_args()
 
-    mod_path = os.path.join(NWN_USER, "modules", args.module + ".mod")
+    nwn_user = nwn_paths.nwn_user()
+    mod_path = os.path.join(nwn_user, "modules", args.module + ".mod")
     if not os.path.exists(mod_path):
-        available = sorted(f[:-4] for f in os.listdir(os.path.join(NWN_USER, "modules")) if f.endswith(".mod"))
+        available = sorted(f[:-4] for f in os.listdir(os.path.join(nwn_user, "modules")) if f.endswith(".mod"))
         fail(f"{mod_path} not found. Modules there: {', '.join(available) or 'none'}. Use --module NAME.")
     for path in (DESCRIPTION, LICENSE, CREDITS, TUTORIAL, SCRIPTS_ERF):
         if not os.path.exists(path):

@@ -22,8 +22,9 @@ import shutil
 import subprocess
 import sys
 
+import nwn_paths
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NWN_USER = os.environ.get("NWN_USER", r"G:\nwnData")
 GFF_TOOL = os.path.join(ROOT, "tools", "neverwinter", "nwn_gff.exe")
 
 QUICKBAR_SLOTS = 36          # F1-F12, Shift+F1-F12, Ctrl+F1-F12
@@ -73,7 +74,7 @@ def main():
 
     path = args.character
     if not path.lower().endswith(".bic"):
-        path = os.path.join(NWN_USER, "localvault", path + ".bic")
+        path = os.path.join(nwn_paths.nwn_user(), "localvault", path + ".bic")
     if not os.path.exists(path):
         sys.exit(f"{path} not found")
     if not os.path.exists(GFF_TOOL):
